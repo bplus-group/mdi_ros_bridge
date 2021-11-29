@@ -7,6 +7,13 @@ This node wraps around the regular API for those devices.
 > ### Note<br>
 > This package is intended as a quick start for the intergration of MDI devices. The acutal evaluation of the grabbed data has to be done on purpose - and maybe for performence reasons also inside this node.
 
+## Content
+
+### mdi_node 
+Contains the ROS2 wrapper implementation around the MDI Rx API.
+
+### third_party
+Contains the actual MDI Rx API for various platforms (ok, right now just linux x86_64). The while the Windows counterpart is available as binary, currently no ROS2 setup on Windows is at hand.
 
 ## Installation
 
@@ -24,9 +31,9 @@ colcon build
 ```
 
 If not already done, source ROS2
-´´´
+```
 $ . ./ros2_galactic/install/local_setup.bash
-´´´
+```
 
 Now build the node
 ```
