@@ -1,0 +1,5 @@
+uint64 received_good_daq_frames
+uint64 timeout_daq_frames
+uint64 tp_corrupt_daq_frames
+uint64 received_bytes
+float32 received_bandwidth_mib
