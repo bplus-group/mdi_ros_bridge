@@ -1,3 +1,3 @@
 std_msgs/Header header
 MdiAvetoProfile mdi_info
-byte[] data
+uint8[] data

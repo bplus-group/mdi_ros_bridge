@@ -8,7 +8,11 @@
 #include "std_msgs/msg/string.hpp"
 #include "mdi_node/msg/mdirxapistatus.hpp"
 #include "mdi_node/msg/mdirawframe.hpp"
+#include "mdi_node/msg/mdi_csi2_frame.hpp"
+#include "mdi_node/msg/mdi_status_frame.hpp"
 #include "MDIRxAPI.h"
+#include "MDI_DAQProt_Profile.h"
+
 using namespace std::chrono_literals;
 #define MDI_NODE_NAME "mdi_receiver"
 
@@ -83,8 +87,7 @@ class MdiBasePublisher : public rclcpp::Node
       RCLCPP_INFO(this->get_logger(), "MDI RX ABI Version: %d", pRxAPI->info.version );
       //publisher_ = this->create_publisher<std_msgs::msg::String>("topic", 10);
       
-      
-      //timer_ = this->create_wall_timer(500ms, std::bind(&MdiBasePublisher::timer_callback, this));
+    
       
       worker_thread_running=true;
       worker_thread=new std::thread(&MdiBasePublisher::mdi_reception_worker, this);
@@ -112,7 +115,8 @@ class MdiBasePublisher : public rclcpp::Node
       pRxAPI->RegisterMemManager(
         [](size_t size_to_alloc, void* pMemMgr, void** pInstanceTag) -> void* {
           pMemMgr=pMemMgr;
-          mdi_node::msg::Mdirawframe* pcache=new mdi_node::msg::Mdirawframe(rosidl_runtime_cpp::MessageInitialization::DEFAULTS_ONLY);
+          /* we're not entirely sure what we will get - so start with a raw message and swap it afterwards */
+          mdi_node::msg::Mdirawframe* pcache=new mdi_node::msg::Mdirawframe(rosidl_runtime_cpp::MessageInitialization::SKIP);
           pcache->data.resize(size_to_alloc);
           *pInstanceTag=(void*)pcache;
           return pcache->data.data();
@@ -135,7 +139,7 @@ class MdiBasePublisher : public rclcpp::Node
       );
 
       api_status_publisher = this->create_publisher<mdi_node::msg::Mdirxapistatus>("mdi/rxapi/status", 10);
-      mdi_raw_publisher = this->create_publisher<mdi_node::msg::Mdirawframe>("mdi/raw_daq", 10);
+      mdi_raw_publisher = this->create_publisher<mdi_node::msg::Mdirawframe>("mdi/raw_daq", 512);
 
       WaitHandle_t hEvt = pRxAPI->GetDataEventHandle();
       pRxAPI->Start();
@@ -153,14 +157,21 @@ class MdiBasePublisher : public rclcpp::Node
               received_bytes+=FrameCache[i].Size;
 
               mdi_node::msg::Mdirawframe* pcache=(mdi_node::msg::Mdirawframe*)FrameCache[i].pInstanceTag;
-              pcache->used_size=FrameCache[i].Size;
-              pcache->src_ip=std::to_string((FrameCache[i].SrcIp)&0xFF) + "." + 
+
+
+              uint32_t used_size=FrameCache[i].Size;
+              std::string src_ip=std::to_string((FrameCache[i].SrcIp)&0xFF) + "." + 
                              std::to_string((FrameCache[i].SrcIp>>8)&0xFF) + "." + 
                              std::to_string((FrameCache[i].SrcIp>>16)&0xFF) + "." + 
                              std::to_string((FrameCache[i].SrcIp>>24)&0xFF);
-
               pRxAPI->FreeData(&FrameCache[i]);
-              mdi_raw_publisher->publish(std::unique_ptr<mdi_node::msg::Mdirawframe>(pcache));
+
+              /* now check what we have here actually and react accordingly */
+              publish_data(src_ip, used_size, std::unique_ptr<mdi_node::msg::Mdirawframe>(pcache));
+
+
+
+              //mdi_raw_publisher->publish();
             }
           }
         }
@@ -189,15 +200,57 @@ class MdiBasePublisher : public rclcpp::Node
       RCLCPP_INFO(this->get_logger(), "reception stopped");
     }
 
-    
+    void extract_meta_data(mdi_node::msg::MdiAvetoProfile& profile, struct AvetoHeaderV2x1_Proto const*const pAveto, std::string& src_ip, uint16_t data_type) {
+      struct SUniqueID_t const*const pUID = (struct SUniqueID_t const*const)&pAveto->frame.uiStreamID;
+
+      profile.src_ip=src_ip;
+      profile.payload_offset=pAveto->frame.uiPayloadOffs;
+      profile.frame_info.stream_id=pAveto->frame.uiStreamID;
+      profile.frame_info.device_instance=pUID->Instance;
+      profile.frame_info.port_number=pUID->Channel;
+      profile.frame_info.port_sub_index=pUID->Index;
+      profile.frame_info.data_type=data_type;
+
+
+      profile.frame_info.cycle_counter=pAveto->cycle.uiCycleCount;
+
+
+
+
+    }
+
+    void publish_data(std::string& src_ip, uint32_t used_size, std::unique_ptr<mdi_node::msg::Mdirawframe> raw_message ) {
+
+      if(used_size < raw_message->data.size()) {
+        raw_message->data.resize(used_size);
+      }
+      struct AvetoHeaderV2x1_Proto const*const pAveto=(struct AvetoHeaderV2x1_Proto const*const)raw_message->data.data();
+      struct SUniqueID_t const*const pUID = (struct SUniqueID_t const*const)&pAveto->frame.uiStreamID;
+
+      switch(pUID->DataType) {
+        case DAQPROT_PACKET_TYPE_CSI2_RAW_AGGREGATION: {
+          auto msg=mdi_node::msg::MdiCsi2Frame(rosidl_runtime_cpp::MessageInitialization::SKIP);
+          extract_meta_data(msg.mdi_info, pAveto, src_ip, pUID->DataType);
+          msg.data.swap(raw_message.data);
+        } break;
+        case DAQPROT_PACKET_TYPE_JSON_STATUS: {
+          auto msg=mdi_node::msg::MdiCsi2Frame(rosidl_runtime_cpp::MessageInitialization::SKIP);
+          extract_meta_data(msg.mdi_info, pAveto, src_ip, pUID->DataType);
+          msg.data.swap(raw_message.data);
+        } break;
+        default: {
+          extract_meta_data(raw_message->mdi_info, pAveto, src_ip, 0);
+        } break;
+      }
+
+
+    }
 
   private:
     void timer_callback()
     {
       auto message = std_msgs::msg::String();
       message.data = "Hello, world! ";
-      //RCLCPP_INFO(this->get_logger(), "Publishing: '%s' - %p", message.data.c_str(), pRxAPI);
-      //publisher_->publish(message);
     }
 
     rclcpp::TimerBase::SharedPtr timer_;

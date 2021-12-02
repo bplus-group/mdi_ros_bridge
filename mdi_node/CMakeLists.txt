@@ -14,8 +14,15 @@ find_package(builtin_interfaces REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 
 set(msg_files
-  "msg/Mdirxapistatus.msg"
+  "msg/AvetoTimebase.msg"
+  "msg/AvetoFrame.msg"
+  "msg/MdiAvetoProfile.msg"
   "msg/Mdirawframe.msg"
+  "msg/MdiCsi2Frame.msg"
+  "msg/MdiI2cFrame.msg"
+  "msg/MdiStatusFrame.msg"
+
+  "msg/Mdirxapistatus.msg"
 )
 
 include_directories(${CMAKE_CURRENT_LIST_DIR}/../third_party/include)
