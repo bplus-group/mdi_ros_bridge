@@ -4,9 +4,13 @@
 #include <string>
 #include <thread>
 #include <stdlib.h>
+#include <unordered_map>
+
 #include "rclcpp/rclcpp.hpp"
 #include "std_msgs/msg/string.hpp"
 #include "mdi_node/msg/mdirxapistatus.hpp"
+#include "mdi_node/msg/aveto_frame.hpp"
+#include "mdi_node/msg/aveto_timebase.hpp"
 #include "mdi_node/msg/mdirawframe.hpp"
 #include "mdi_node/msg/mdi_csi2_frame.hpp"
 #include "mdi_node/msg/mdi_status_frame.hpp"
@@ -167,11 +171,9 @@ class MdiBasePublisher : public rclcpp::Node
               pRxAPI->FreeData(&FrameCache[i]);
 
               /* now check what we have here actually and react accordingly */
-              publish_data(src_ip, used_size, std::unique_ptr<mdi_node::msg::Mdirawframe>(pcache));
+              convert_aveto_to_ros(src_ip, used_size, pcache);
 
-
-
-              //mdi_raw_publisher->publish();
+              mdi_raw_publisher->publish(std::unique_ptr<mdi_node::msg::Mdirawframe>(pcache));
             }
           }
         }
@@ -200,46 +202,74 @@ class MdiBasePublisher : public rclcpp::Node
       RCLCPP_INFO(this->get_logger(), "reception stopped");
     }
 
-    void extract_meta_data(mdi_node::msg::MdiAvetoProfile& profile, struct AvetoHeaderV2x1_Proto const*const pAveto, std::string& src_ip, uint16_t data_type) {
-      struct SUniqueID_t const*const pUID = (struct SUniqueID_t const*const)&pAveto->frame.uiStreamID;
-
-      profile.src_ip=src_ip;
-      profile.payload_offset=pAveto->frame.uiPayloadOffs;
-      profile.frame_info.stream_id=pAveto->frame.uiStreamID;
-      profile.frame_info.device_instance=pUID->Instance;
-      profile.frame_info.port_number=pUID->Channel;
-      profile.frame_info.port_sub_index=pUID->Index;
-      profile.frame_info.data_type=data_type;
-
-
-      profile.frame_info.cycle_counter=pAveto->cycle.uiCycleCount;
-
-
-
-
-    }
-
-    void publish_data(std::string& src_ip, uint32_t used_size, std::unique_ptr<mdi_node::msg::Mdirawframe> raw_message ) {
+    void convert_aveto_to_ros(std::string& src_ip, uint32_t used_size, mdi_node::msg::Mdirawframe* raw_message ) {
 
       if(used_size < raw_message->data.size()) {
         raw_message->data.resize(used_size);
       }
       struct AvetoHeaderV2x1_Proto const*const pAveto=(struct AvetoHeaderV2x1_Proto const*const)raw_message->data.data();
       struct SUniqueID_t const*const pUID = (struct SUniqueID_t const*const)&pAveto->frame.uiStreamID;
+      uint64_t used_timestamp=0;
+
+      raw_message->mdi_info.src_ip=src_ip;
+      raw_message->mdi_info.payload_offset=pAveto->frame.uiPayloadOffs;
+      raw_message->mdi_info.frame_info.stream_id=pAveto->frame.uiStreamID;
+      raw_message->mdi_info.frame_info.device_instance=pUID->Instance;
+      raw_message->mdi_info.frame_info.port_number=pUID->Channel;
+      raw_message->mdi_info.frame_info.port_sub_index=pUID->Index;
+      raw_message->mdi_info.frame_info.cycle_counter=pAveto->cycle.uiCycleCount;
+      raw_message->mdi_info.frame_info.data_type=pUID->DataType;
+
+      /* The timesynchronization is a very extensive feature, therefore we to the import to ROS2 explitly - so we
+         have a chance to add some comments. */
+
+      /* MDI Profile of Aveto always uses time[0] as a MDI-local monotonic nanosecond counter as reference 
+         for any other time domain - but, by design, this counter cannot and will not carry the 
+         synchronized flag. For extensive analysis this counter can be used to detect, evaluate and correct
+         any time jumps/gaps occring in the environment (temporary lost of GPS fix on grandmaster, etc...). */
+      raw_message->mdi_info.time[0].timebase_type=pAveto->time[0].uiTimebaseType;  // TB_TYPE_LOCAL_NS
+      raw_message->mdi_info.time[0].timebase_flag=pAveto->time[0].uiTimebaseFlags; // TB_FLAG_UNSYNCED
+      raw_message->mdi_info.time[0].timestamp=pAveto->time[0].uiTimestamp;
+
+      /* time[1] of MDI Profile will contain the TAI time (or rather 802.1AS Domain 0, to be correct), except if
+         the MDI device is explictly configured to use UTC - then this time will be in UTC. For most applications
+         UTC is discouraged because of the leap seconds, as this adds additional effort to the later evaluation and
+         is generally error prone. One of the most typical effects is a GPS receiver getting the first fix of
+         a power cycle - you will always get a time jump of several seconds in this case. However some environments
+         still rely on UTC instead of TAI. */
+      raw_message->mdi_info.time[1].timebase_type=pAveto->time[1].uiTimebaseType;  // TB_TYPE_TAI or TB_TYPE_UTC
+      raw_message->mdi_info.time[1].timebase_flag=pAveto->time[1].uiTimebaseFlags; // TB_FLAG_UNSYNCED
+      raw_message->mdi_info.time[1].timestamp=pAveto->time[1].uiTimestamp;
+      used_timestamp=pAveto->time[1].uiTimestamp; /* as ROS2 uses TAI out of the box, we just assume noone uses UTC */
+      
+      {
+        static bool there_was_no_utc=true;
+        if(pAveto->time[1].uiTimebaseType==DAQPROT_TIMEBASE_UTC && there_was_no_utc) {
+          RCLCPP_ERROR(this->get_logger(), "at least MDI device at %s is using UTC instead of TAI - check your configuration", src_ip.c_str() );
+          there_was_no_utc=false;
+        }
+      }
+
+      /* time[2] of the MDI Profile always contains a WCD (Working Clock Domain) timestamp - if supplied.
+         WCD is typically transported via 802.1AS Domain 1 and is defined as synchronized monotonic increasing
+         timebase in contrast to TAI as timebase. */
+      raw_message->mdi_info.time[2].timebase_type=pAveto->time[2].uiTimebaseType;  // TB_TYPE_WCD
+      raw_message->mdi_info.time[2].timebase_flag=pAveto->time[2].uiTimebaseFlags; // TB_FLAG_UNSYNCED
+      raw_message->mdi_info.time[2].timestamp=pAveto->time[2].uiTimestamp;
+
+      raw_message->header.frame_id="MDILink"+std::to_string(pUID->Instance);
+      raw_message->header.stamp.sec=used_timestamp / 1000000000ULL;
+      raw_message->header.stamp.nanosec=used_timestamp - (raw_message->header.stamp.sec * 1000000000ULL);
 
       switch(pUID->DataType) {
         case DAQPROT_PACKET_TYPE_CSI2_RAW_AGGREGATION: {
-          auto msg=mdi_node::msg::MdiCsi2Frame(rosidl_runtime_cpp::MessageInitialization::SKIP);
-          extract_meta_data(msg.mdi_info, pAveto, src_ip, pUID->DataType);
-          msg.data.swap(raw_message.data);
+          raw_message->mdi_info.frame_info.data_type=mdi_node::msg::AvetoFrame::DATA_TYPE_CSI2;
         } break;
         case DAQPROT_PACKET_TYPE_JSON_STATUS: {
-          auto msg=mdi_node::msg::MdiCsi2Frame(rosidl_runtime_cpp::MessageInitialization::SKIP);
-          extract_meta_data(msg.mdi_info, pAveto, src_ip, pUID->DataType);
-          msg.data.swap(raw_message.data);
+          raw_message->mdi_info.frame_info.data_type=mdi_node::msg::AvetoFrame::DATA_TYPE_JSON_STATUS;
         } break;
         default: {
-          extract_meta_data(raw_message->mdi_info, pAveto, src_ip, 0);
+          raw_message->mdi_info.frame_info.data_type=mdi_node::msg::AvetoFrame::DATA_TYPE_NOT_IMPLEMENTED_YET;
         } break;
       }
 
@@ -247,15 +277,7 @@ class MdiBasePublisher : public rclcpp::Node
     }
 
   private:
-    void timer_callback()
-    {
-      auto message = std_msgs::msg::String();
-      message.data = "Hello, world! ";
-    }
-
-    rclcpp::TimerBase::SharedPtr timer_;
-    
-    
+   
     MdiRx_Reception_interface_t const*const pRxAPI;
     std::thread* worker_thread;
     bool worker_thread_running;
