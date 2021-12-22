@@ -9,8 +9,14 @@ This node wraps around the regular API for those devices.
 
 ## Content
 
+### mdi_msgs
+Provides all the messages used by the MDI Node(let).
+
 ### mdi_node 
-Contains the ROS2 wrapper implementation around the MDI Rx API.
+Contains the ROS2 wrapper implementation around the MDI Rx API as a seperate ROS2 Node.
+
+### mdi_nodelet
+Contains the (almost) identical ROS2 wrapper implementation from __mdi_node__ as ROS2 Component (aka Nodelet).
 
 ### third_party
 Contains the actual MDI Rx API for various platforms (ok, right now just linux x86_64). The while the Windows counterpart is available as binary, currently no ROS2 setup on Windows is at hand.
