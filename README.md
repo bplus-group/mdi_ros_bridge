@@ -25,9 +25,20 @@ git clone <url_to_do>
 -optional- update the API binaries (typically, those are ABI stable)<br>
 -> replace the binaries in third_party folder
 
-Build the node
+### Build as nodelet
 ```
 colcon build
+or
+colcon build --cmake-clean-cache
+```
+
+
+
+### Build as node
+```
+AS_NODE= colcon build
+or
+AS_NODE= colcon build --cmake-clean-cache
 ```
 
 If not already done, source ROS2

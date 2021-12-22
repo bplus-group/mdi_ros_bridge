@@ -1,4 +1,7 @@
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
 #include "DAQProtTypes_V2_1_extract.h"
+#pragma GCC diagnostic push
 
 using namespace AVETO::DAQProt_v201;
 

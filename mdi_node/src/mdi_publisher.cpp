@@ -1,3 +1,25 @@
+// MIT License
+//
+// Copyright (c) 2021 b-plus technologies GmbH
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
 #include <chrono>
 #include <functional>
 #include <memory>
@@ -6,21 +28,28 @@
 #include <stdlib.h>
 #include <unordered_map>
 
-#include "rclcpp/rclcpp.hpp"
-#include "std_msgs/msg/string.hpp"
-#include "mdi_node/msg/mdirxapistatus.hpp"
-#include "mdi_node/msg/aveto_frame.hpp"
-#include "mdi_node/msg/aveto_timebase.hpp"
-#include "mdi_node/msg/mdirawframe.hpp"
-#include "mdi_node/msg/mdi_csi2_frame.hpp"
-#include "mdi_node/msg/mdi_status_frame.hpp"
+#ifdef AS_NODELET
+#include "visibility_control.h"
+#endif
+
+#include <rclcpp/rclcpp.hpp>
+#include <std_msgs/msg/string.hpp>
+#include <mdi_msgs/msg/mdirxapistatus.hpp>
+#include <mdi_msgs/msg/aveto_frame.hpp>
+#include <mdi_msgs/msg/aveto_timebase.hpp>
+#include <mdi_msgs/msg/mdirawframe.hpp>
+#include <mdi_msgs/msg/mdi_csi2_frame.hpp>
+#include <mdi_msgs/msg/mdi_status_frame.hpp>
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wignored-qualifiers"
 #include "MDIRxAPI.h"
+#pragma GCC diagnostic pop
 #include "MDI_DAQProt_Profile.h"
 
 using namespace std::chrono_literals;
 #define MDI_NODE_NAME "mdi_receiver"
 
-/* sadly, neither ROS2, not iceoryx, support variable sized messages at the moment. this makes usage of
+/* sadly, neither ROS2, nor iceoryx, support variable sized messages at the moment. this makes usage of
    zero-copy a little bit... impossible, at least if your data can be at any size */
 
 
@@ -74,29 +103,40 @@ uint64_t CreateTimestampUs() {
 }
 #endif
 
-void dfsa(mdi_node::msg::Mdirawframe* pcache) {
-
-}
-
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wignored-qualifiers"
 MDIRXAPI_API MdiRx_API_interface_t const*const (MDIRXAPI_DECL *BplMeas_DynInvokeApi)( void )=nullptr;
+#pragma GCC diagnostic pop
+
 class MdiBasePublisher : public rclcpp::Node
 {
-  public:
-    MdiBasePublisher()
-    : Node(MDI_NODE_NAME), pRxAPI(BplMeas_DynInvokeApi()?BplMeas_DynInvokeApi()->GetRxAPI():nullptr)
-    {
+  #ifdef AS_NODELET
+  COMPOSITION_PUBLIC
+  #endif
+  private:
+    void MdiBasePublisher_Initializer() {
       if(!pRxAPI) throw std::runtime_error("mdi rx api was not properly laoded");
       uint32_t v = pRxAPI->GetApiVersion();
       RCLCPP_INFO(this->get_logger(), "MDI API Version: %d.%d.%d (%s)", (v>>16) & 0xFF, (v>>8)&0xFF, v&0xFF, (v&0x8000000)?"DEBUG":"Release");
       RCLCPP_INFO(this->get_logger(), "MDI RX ABI Version: %d", pRxAPI->info.version );
-      //publisher_ = this->create_publisher<std_msgs::msg::String>("topic", 10);
-      
-    
-      
+
       worker_thread_running=true;
       worker_thread=new std::thread(&MdiBasePublisher::mdi_reception_worker, this);
-       
+    } 
+  public:
+  #ifdef AS_NODELET
+    MdiBasePublisher(const rclcpp::NodeOptions &option) :
+    : Node(MDI_NODE_NAME, option), pRxAPI(BplMeas_DynInvokeApi()?BplMeas_DynInvokeApi()->GetRxAPI():nullptr)
+    {
+      MdiBasePublisher_Initializer();
     }
+  #else
+    MdiBasePublisher()
+    : Node(MDI_NODE_NAME), pRxAPI(BplMeas_DynInvokeApi()?BplMeas_DynInvokeApi()->GetRxAPI():nullptr)
+    {
+      MdiBasePublisher_Initializer();  
+    }
+  #endif
 
     virtual ~MdiBasePublisher() {
       worker_thread_running=false;
@@ -106,10 +146,10 @@ class MdiBasePublisher : public rclcpp::Node
   protected:
     void mdi_reception_worker() {
       uint64_t received_bytes=0;
-      rclcpp::Publisher<mdi_node::msg::Mdirxapistatus>::SharedPtr api_status_publisher;
-      rclcpp::Publisher<mdi_node::msg::Mdirawframe>::SharedPtr mdi_raw_publisher;
-      rclcpp::Publisher<mdi_node::msg::MdiStatusFrame>::SharedPtr mdi_status_publisher;
-      rclcpp::Publisher<mdi_node::msg::MdiCsi2Frame>::SharedPtr mdi_csi2_publisher;
+      rclcpp::Publisher<mdi_msgs::msg::Mdirxapistatus>::SharedPtr api_status_publisher;
+      rclcpp::Publisher<mdi_msgs::msg::Mdirawframe>::SharedPtr mdi_raw_publisher;
+      rclcpp::Publisher<mdi_msgs::msg::MdiStatusFrame>::SharedPtr mdi_status_publisher;
+      rclcpp::Publisher<mdi_msgs::msg::MdiCsi2Frame>::SharedPtr mdi_csi2_publisher;
       BplMeasFrameInfo_t FrameCache[256];
       
       uint32_t dwFrameCount = 256;
@@ -122,7 +162,7 @@ class MdiBasePublisher : public rclcpp::Node
         [](size_t size_to_alloc, void* pMemMgr, void** pInstanceTag) -> void* {
           pMemMgr=pMemMgr;
           /* we're not entirely sure what we will get - so start with a raw message and swap it afterwards */
-          mdi_node::msg::Mdirawframe* pcache=new mdi_node::msg::Mdirawframe(rosidl_runtime_cpp::MessageInitialization::SKIP);
+          mdi_msgs::msg::Mdirawframe* pcache=new mdi_msgs::msg::Mdirawframe(rosidl_runtime_cpp::MessageInitialization::SKIP);
           pcache->data.resize(size_to_alloc);
           *pInstanceTag=(void*)pcache;
           return pcache->data.data();
@@ -130,7 +170,7 @@ class MdiBasePublisher : public rclcpp::Node
         [](void* p, size_t size_to_alloc, void* pMemMgr, void** pInstanceTag) -> void* {
           p=p;
           pMemMgr=pMemMgr;
-          mdi_node::msg::Mdirawframe* pcache=(mdi_node::msg::Mdirawframe*)*pInstanceTag;
+          mdi_msgs::msg::Mdirawframe* pcache=(mdi_msgs::msg::Mdirawframe*)*pInstanceTag;
           pcache->data.resize(size_to_alloc);
           return pcache->data.data();
         },
@@ -144,16 +184,14 @@ class MdiBasePublisher : public rclcpp::Node
         this
       );
 
-      api_status_publisher = this->create_publisher<mdi_node::msg::Mdirxapistatus>("mdi/rxapi/status", 10);
-      mdi_raw_publisher = this->create_publisher<mdi_node::msg::Mdirawframe>("mdi/raw_daq", 512);
-      mdi_csi2_publisher = this->create_publisher<mdi_node::msg::MdiCsi2Frame>("mdi/csi2_frame", 512);
-      mdi_status_publisher = this->create_publisher<mdi_node::msg::MdiStatusFrame>("mdi/status", 32);
+      api_status_publisher = this->create_publisher<mdi_msgs::msg::Mdirxapistatus>("mdi/rxapi/status", 10);
+      mdi_raw_publisher = this->create_publisher<mdi_msgs::msg::Mdirawframe>("mdi/raw_daq", 512);
+      mdi_csi2_publisher = this->create_publisher<mdi_msgs::msg::MdiCsi2Frame>("mdi/csi2_frame", 512);
+      mdi_status_publisher = this->create_publisher<mdi_msgs::msg::MdiStatusFrame>("mdi/status", 32);
 
       WaitHandle_t hEvt = pRxAPI->GetDataEventHandle();
       pRxAPI->Start();
       RCLCPP_INFO(this->get_logger(), "reception started");
-
-      uint32_t cnt=16;
       
       uint64_t TS = CreateTimestampUs();
       while(worker_thread_running /*&& rclcpp::ok()*/) {
@@ -164,7 +202,7 @@ class MdiBasePublisher : public rclcpp::Node
             for (uint32_t i = 0; i < dwFrameCount; i++) {
               received_bytes+=FrameCache[i].Size;
 
-              std::unique_ptr<mdi_node::msg::Mdirawframe> pcache = std::unique_ptr<mdi_node::msg::Mdirawframe>((mdi_node::msg::Mdirawframe*)FrameCache[i].pInstanceTag);
+              std::unique_ptr<mdi_msgs::msg::Mdirawframe> pcache = std::unique_ptr<mdi_msgs::msg::Mdirawframe>((mdi_msgs::msg::Mdirawframe*)FrameCache[i].pInstanceTag);
 
               uint32_t used_size=FrameCache[i].Size;
               std::string src_ip=std::to_string((FrameCache[i].SrcIp)&0xFF) + "." + 
@@ -176,14 +214,14 @@ class MdiBasePublisher : public rclcpp::Node
               if(used_size < pcache->data.size()) {
                 pcache->data.resize(used_size);
               }
-              struct AvetoHeaderV2x1_Proto const*const pAveto=(struct AvetoHeaderV2x1_Proto const*const)pcache->data.data();
-              struct SUniqueID_t const*const pUID = (struct SUniqueID_t const*const)&pAveto->frame.uiStreamID;
+              const struct AvetoHeaderV2x1_Proto* pAveto=(struct AvetoHeaderV2x1_Proto const*)pcache->data.data();
+              const struct SUniqueID_t* pUID = (struct SUniqueID_t const*)&pAveto->frame.uiStreamID;
 
               switch(pUID->DataType) {
                 case DAQPROT_PACKET_TYPE_CSI2_RAW_AGGREGATION: {
                   /* for CSI2 frames, we just gather the header information and swap the payload - no need to do any
                      expensive copies here */
-                  auto csi2_msg=mdi_node::msg::MdiCsi2Frame(rosidl_runtime_cpp::MessageInitialization::SKIP);
+                  auto csi2_msg=mdi_msgs::msg::MdiCsi2Frame(rosidl_runtime_cpp::MessageInitialization::SKIP);
                   uint32_t offset=raw_convert_aveto_to_ros(src_ip, pAveto, csi2_msg.mdi_info, csi2_msg.header);
                   csi2_msg.data.swap(pcache->data);
                   csi2_msg.offset_to_payload=offset;
@@ -192,7 +230,7 @@ class MdiBasePublisher : public rclcpp::Node
                 case DAQPROT_PACKET_TYPE_JSON_STATUS: {
                   /* the MDI device regularily sends some status information, as a large JSON string. This needs
                      to be copied from the payload (thanks, STL). But it's only every now and then, so it's ok. */
-                  auto json_msg=mdi_node::msg::MdiStatusFrame(rosidl_runtime_cpp::MessageInitialization::SKIP);
+                  auto json_msg=mdi_msgs::msg::MdiStatusFrame(rosidl_runtime_cpp::MessageInitialization::SKIP);
                   uint32_t offset=raw_convert_aveto_to_ros(src_ip, pAveto, json_msg.mdi_info, json_msg.header);
                   json_msg.stati=std::string(pcache->data.begin()+offset, pcache->data.end());
                   mdi_status_publisher->publish(json_msg);
@@ -215,7 +253,7 @@ class MdiBasePublisher : public rclcpp::Node
         if( (nTS - TS) > 1000000) {
           BplMeasMdiReceptionStatistics_t statistics;
           if (pRxAPI->GetStatistics(&statistics) == NOERROR) {
-            auto message = mdi_node::msg::Mdirxapistatus();
+            auto message = mdi_msgs::msg::Mdirxapistatus();
             message.received_good_daq_frames+=statistics.NewCompletedFrames;
             message.timeout_daq_frames+=statistics.NewTimeoutFrames;
             message.tp_corrupt_daq_frames+=statistics.NewCorruptFrames+statistics.NewDiscardedFrames;
@@ -235,8 +273,8 @@ class MdiBasePublisher : public rclcpp::Node
       RCLCPP_INFO(this->get_logger(), "reception stopped");
     }
 
-    uint32_t raw_convert_aveto_to_ros(std::string& src_ip, struct AvetoHeaderV2x1_Proto const*const pAveto, mdi_node::msg::MdiAvetoProfile& mdi_info, std_msgs::msg::Header& header  ) {
-      struct SUniqueID_t const*const pUID = (struct SUniqueID_t const*const)&pAveto->frame.uiStreamID;
+    uint32_t raw_convert_aveto_to_ros(std::string& src_ip, struct AvetoHeaderV2x1_Proto const*const pAveto, mdi_msgs::msg::MdiAvetoProfile& mdi_info, std_msgs::msg::Header& header  ) {
+      const struct SUniqueID_t* pUID = (struct SUniqueID_t const*)&pAveto->frame.uiStreamID;
       uint64_t used_timestamp=0;
 
       mdi_info.src_ip=src_ip;
@@ -299,6 +337,9 @@ class MdiBasePublisher : public rclcpp::Node
     bool worker_thread_running;
 };
 
+
+#ifndef AS_NODELET
+
 int main(int argc, char * argv[])
 {
   rclcpp::init(argc, argv);
@@ -306,6 +347,14 @@ int main(int argc, char * argv[])
   rclcpp::shutdown();
   return 0;
 }
+#else 
+#include <rclcpp_components/register_node_macro.hpp>
+// Register the component with class_loader.
+// This acts as a sort of entry point, allowing the component to be discoverable
+// when its library is being loaded into a running process.
+RCLCPP_COMPONENTS_REGISTER_NODE(MdiBasePublisher)
+#endif
+
 
 
 #ifdef WIN32
