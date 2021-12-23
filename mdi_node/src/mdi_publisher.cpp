@@ -108,41 +108,28 @@ uint64_t CreateTimestampUs() {
 MDIRXAPI_API MdiRx_API_interface_t const*const (MDIRXAPI_DECL *BplMeas_DynInvokeApi)( void )=nullptr;
 #pragma GCC diagnostic pop
 
-class MdiBasePublisher : public rclcpp::Node
+class MdiReceiveNode : public rclcpp::Node
 {
-  #ifdef AS_NODELET
-  COMPOSITION_PUBLIC
-  #endif
-  private:
-    void MdiBasePublisher_Initializer() {
-      if(!pRxAPI) throw std::runtime_error("mdi rx api was not properly laoded");
-      uint32_t v = pRxAPI->GetApiVersion();
-      RCLCPP_INFO(this->get_logger(), "MDI API Version: %d.%d.%d (%s)", (v>>16) & 0xFF, (v>>8)&0xFF, v&0xFF, (v&0x8000000)?"DEBUG":"Release");
-      RCLCPP_INFO(this->get_logger(), "MDI RX ABI Version: %d", pRxAPI->info.version );
-
-      worker_thread_running=true;
-      worker_thread=new std::thread(&MdiBasePublisher::mdi_reception_worker, this);
-    } 
   public:
   #ifdef AS_NODELET
-    MdiBasePublisher(const rclcpp::NodeOptions &option) :
+    COMPOSITION_PUBLIC
+    MdiReceiveNode(const rclcpp::NodeOptions &option)
     : Node(MDI_NODE_NAME, option), pRxAPI(BplMeas_DynInvokeApi()?BplMeas_DynInvokeApi()->GetRxAPI():nullptr)
     {
-      MdiBasePublisher_Initializer();
+      MdiReceiveNode_Initializer();
     }
   #else
-    MdiBasePublisher()
+    MdiReceiveNode()
     : Node(MDI_NODE_NAME), pRxAPI(BplMeas_DynInvokeApi()?BplMeas_DynInvokeApi()->GetRxAPI():nullptr)
     {
-      MdiBasePublisher_Initializer();  
+      MdiReceiveNode_Initializer();  
     }
   #endif
 
-    virtual ~MdiBasePublisher() {
+    virtual ~MdiReceiveNode() {
       worker_thread_running=false;
       worker_thread->join();
     }
-
   protected:
     void mdi_reception_worker() {
       uint64_t received_bytes=0;
@@ -335,6 +322,17 @@ class MdiBasePublisher : public rclcpp::Node
     MdiRx_Reception_interface_t const*const pRxAPI;
     std::thread* worker_thread;
     bool worker_thread_running;
+    
+    
+    void MdiReceiveNode_Initializer() {
+      if(!pRxAPI) throw std::runtime_error("mdi rx api was not properly laoded");
+      uint32_t v = pRxAPI->GetApiVersion();
+      RCLCPP_INFO(this->get_logger(), "MDI API Version: %d.%d.%d (%s)", (v>>16) & 0xFF, (v>>8)&0xFF, v&0xFF, (v&0x8000000)?"DEBUG":"Release");
+      RCLCPP_INFO(this->get_logger(), "MDI RX ABI Version: %d", pRxAPI->info.version );
+
+      worker_thread_running=true;
+      worker_thread=new std::thread(&MdiReceiveNode::mdi_reception_worker, this);
+    }
 };
 
 
@@ -343,7 +341,7 @@ class MdiBasePublisher : public rclcpp::Node
 int main(int argc, char * argv[])
 {
   rclcpp::init(argc, argv);
-  rclcpp::spin(std::make_shared<MdiBasePublisher>());
+  rclcpp::spin(std::make_shared<MdiReceiveNode>());
   rclcpp::shutdown();
   return 0;
 }
@@ -352,7 +350,7 @@ int main(int argc, char * argv[])
 // Register the component with class_loader.
 // This acts as a sort of entry point, allowing the component to be discoverable
 // when its library is being loaded into a running process.
-RCLCPP_COMPONENTS_REGISTER_NODE(MdiBasePublisher)
+RCLCPP_COMPONENTS_REGISTER_NODE(MdiReceiveNode)
 #endif
 
 
