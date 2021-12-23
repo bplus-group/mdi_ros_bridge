@@ -337,7 +337,6 @@ class MdiReceiveNode : public rclcpp::Node
 
 
 #ifndef AS_NODELET
-
 int main(int argc, char * argv[])
 {
   rclcpp::init(argc, argv);
