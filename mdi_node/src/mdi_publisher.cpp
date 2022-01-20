@@ -131,10 +131,13 @@ class MdiReceiveNode : public rclcpp::Node
                 case DAQPROT_PACKET_TYPE_CSI2_RAW_AGGREGATION: {
                   /* for CSI2 frames, we just gather the header information and swap the payload - no need to do any
                      expensive copies here */
+                  const struct AvetoHeaderV2x1_CSI2Raw* pCsi2=(struct AvetoHeaderV2x1_CSI2Raw const*)pAveto;
                   auto csi2_msg=mdi_msgs::msg::MdiCsi2Frame(rosidl_runtime_cpp::MessageInitialization::SKIP);
                   uint32_t offset=raw_convert_aveto_to_ros(src_ip, pAveto, csi2_msg.mdi_info, csi2_msg.header);
                   csi2_msg.data.swap(pcache->data);
                   csi2_msg.offset_to_payload=offset;
+                  csi2_msg.number_lines=pCsi2->CSI2RawLines.uiLineCount;
+
                   mdi_csi2_publisher->publish(csi2_msg);
                 } break;
                 case DAQPROT_PACKET_TYPE_JSON_STATUS: {
