@@ -20,11 +20,15 @@ ADD_DEFINITIONS (
 
 include_directories(
   ${CMAKE_CURRENT_LIST_DIR}/../third_party/include
+  ${CMAKE_CURRENT_LIST_DIR}/../mdi_node/src
   ${CMAKE_CURRENT_LIST_DIR}/include
 )
 link_directories(${CMAKE_CURRENT_LIST_DIR}/../third_party/lib)
 
-add_library(mdi_rx_nodelet SHARED ../mdi_node/src/mdi_publisher.cpp)
+add_library(mdi_rx_nodelet SHARED 
+  ../mdi_node/src/mdi_publisher.cpp
+  ../mdi_node/src/mdi_lib_wrapper.cpp
+)
 
 target_compile_definitions(mdi_rx_nodelet
   PRIVATE "COMPOSITION_BUILDING_DLL")

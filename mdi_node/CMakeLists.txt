@@ -16,7 +16,10 @@ find_package(mdi_msgs REQUIRED)
 include_directories(${CMAKE_CURRENT_LIST_DIR}/../third_party/include)
 link_directories(${CMAKE_CURRENT_LIST_DIR}/../third_party/lib)
 
-add_executable(mdi_rx_node src/mdi_publisher.cpp)
+add_executable(mdi_rx_node 
+  src/mdi_publisher.cpp
+  src/mdi_lib_wrapper.cpp
+)
 ament_target_dependencies(mdi_rx_node rclcpp std_msgs mdi_msgs)
 ament_export_include_directories(include)
 
