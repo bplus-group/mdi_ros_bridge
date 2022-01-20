@@ -1,6 +1,6 @@
 // MIT License
 //
-// Copyright (c) 2021 b-plus technologies GmbH
+// Copyright (c) 2022 b-plus technologies GmbH
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -245,7 +245,6 @@ class MdiReceiveNode : public rclcpp::Node
     MdiRx_Reception_interface_t const*const pRxAPI;
     std::thread* worker_thread;
     bool worker_thread_running;
-    
     
     void MdiReceiveNode_Initializer() {
       if(!pRxAPI) throw std::runtime_error("mdi rx api was not properly laoded");
