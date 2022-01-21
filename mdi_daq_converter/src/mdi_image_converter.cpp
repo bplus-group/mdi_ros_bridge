@@ -79,10 +79,10 @@ class MdiConverterNode : public rclcpp::Node {
             act_content->length=pLine->sCSI2Header.sLongHeader.uiWordCount;
             const SCSI2RawLineFooter_t* pEnd = (const SCSI2RawLineFooter_t*)&((const uint8_t*)(pLine+1))[pLine->sCSI2Header.sLongHeader.uiWordCount];
             pLine = (const SCSI2RawLineHeader_t*)(pEnd+1);
-            act_content->publisher=this->create_publisher<sensor_msgs::msg::Image>("mdi/" + 
-                                                                                    std::to_string(msg->mdi_info.frame_info.device_instance) + "/" +
-                                                                                    std::to_string(msg->mdi_info.frame_info.port_number) + "/" +
-                                                                                    std::to_string(pLine->sCSI2Header.sShortHeader.uiVirtualChannel) + "/" +
+            act_content->publisher=this->create_publisher<sensor_msgs::msg::Image>("mdi/instance_" + 
+                                                                                    std::to_string(msg->mdi_info.frame_info.device_instance) + "/port_" +
+                                                                                    std::to_string(msg->mdi_info.frame_info.port_number) + "/vc_" +
+                                                                                    std::to_string(pLine->sCSI2Header.sShortHeader.uiVirtualChannel) + "/dt_" +
                                                                                     std::to_string(pLine->sCSI2Header.sShortHeader.uiDataType)
                                                                                     , 32);
           }

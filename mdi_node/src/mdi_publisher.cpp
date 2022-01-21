@@ -126,8 +126,6 @@ class MdiReceiveNode : public rclcpp::Node
         this
       );
 
-      
-
       WaitHandle_t hEvt = m_pRxAPI->GetDataEventHandle();
       m_pRxAPI->Start();
       RCLCPP_INFO(this->get_logger(), "reception started");

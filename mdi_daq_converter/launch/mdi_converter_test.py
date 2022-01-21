@@ -15,8 +15,12 @@ def generate_launch_description():
             composable_node_descriptions=[
                 ComposableNode(
                     package='mdi_daq_converter',
+                    plugin='MdiConverterNode',
+                    name='mdi_converter'),
+                ComposableNode(
+                    package='mdi_dummy_pub',
                     plugin='MdiReceiveNode',
-                    name='mdi_converter')
+                    name='mdi_dummy_pub')
                 # Add here another component
             ],
             output='screen',
