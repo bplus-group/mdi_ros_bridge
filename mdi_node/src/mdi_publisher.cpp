@@ -70,7 +70,7 @@ class MdiReceiveNode : public rclcpp::Node
             csi2_msg.data.swap(pcache->data);
             csi2_msg.offset_to_payload=offset;
             csi2_msg.number_lines=pCsi2->CSI2RawLines.uiLineCount;
-
+            
             m_mdi_csi2_publisher->publish(csi2_msg);
           } break;
           case DAQPROT_PACKET_TYPE_JSON_STATUS: {
