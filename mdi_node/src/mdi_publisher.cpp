@@ -153,6 +153,8 @@ class MdiReceiveNode : public rclcpp::Node
               evaluate_frame(std::move(pcache), src_ip);
             }
           }
+        } else {
+          std::this_thread::sleep_for(10ms);
         }
 
         uint64_t nTS = CreateTimestampUs();
@@ -171,8 +173,6 @@ class MdiReceiveNode : public rclcpp::Node
           TS = nTS;
         }
 
-
-        std::this_thread::sleep_for(500ms);
       }
       m_pRxAPI->Stop();
       m_pRxAPI->Deinit();
