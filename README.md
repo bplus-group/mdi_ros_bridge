@@ -143,9 +143,9 @@ However feel free to use this as a starting point for the converstion.
 - The converter creates an information tree of the data types. We split the following:<br>
   __MDI Instance -> MDI Channel -> Virtual CSI2 Channel -> CSI2 Data Type__<br>
   In this way we cover the following parts of the CSI2 standard:<br>
-  -> __Virtual Channels__ which have their own separate framing (begin/end).
-  -> __Virtual Channel Interleaving__ where different channels are mixed inbetween the lines.
-  -> __Data Type Interleaving__ when multiple images with the same virtual channel are contained in the same CSI2 frame.
+  -> __Virtual Channels__ which have their own separate framing (begin/end).<br>
+  -> __Virtual Channel Interleaving__ where different channels are mixed inbetween the lines.<br>
+  -> __Data Type Interleaving__ when multiple images with the same virtual channel are contained in the same CSI2 frame.<br>
 
 - The converter creates a separate publisher for every image type in the following scheme:<br>
   mdi/instance__\<num>/port_\<port>/vc_\<virtual_channel>/dt_\<csi2_data_type_num> <br>
