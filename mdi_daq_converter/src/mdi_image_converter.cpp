@@ -8,7 +8,7 @@
 #include <mdi_msgs/msg/mdi_csi2_frame.hpp>
 #include <std_msgs/msg/string.hpp>
 #include <sensor_msgs/msg/image.hpp>
-#include <sensor_msgs/image_encodings.h>
+#include <sensor_msgs/image_encodings.hpp>
 #include "MDI_DAQProt_Profile.h"
 using std::placeholders::_1;
 
@@ -34,7 +34,7 @@ struct frame_content {
   uint32_t lines;
   uint16_t length;
   uint16_t length_odd;
-  uint16_t width;
+  uint32_t width;
   bool init;
   sensor_msgs::msg::Image Image;
   uint32_t image_pos;
@@ -66,8 +66,9 @@ class MdiConverterNode : public rclcpp::Node {
 
   private:
     
+    /* we have some CSI2 data types with interleaving line lengths */
     bool weird_line_behavior(uint8_t dt) {
-      switch(dt&0x2F) {
+      switch(dt&0x3F) {
         case 0x18: // YUV420-8
         case 0x1C: // YUV420-8C
         case 0x19: // YUV420-10
@@ -78,11 +79,19 @@ class MdiConverterNode : public rclcpp::Node {
     }
 
     const char* csi2_type_to_ros2(uint8_t dt) {
-      return "";
+      switch(dt&0x3F) {
+        case 0x1E: // YUV422-8
+          return sensor_msgs::image_encodings::YUV422;
+        //case 0x2A: // RAW8
+        //  return sensor_msgs::image_encodings::MONO8;
+        //case 0x24: // RGB888
+        //  return sensor_msgs::image_encodings::RGB8;
+      }
+      return "N/A";
     }
 
     uint32_t convert_line_length(uint8_t dt, uint32_t line, uint16_t num_bytes) {
-      switch(dt&0x2F) {
+      switch(dt&0x3F) {
         case 0x18: // YUV420-8
         case 0x1C: // YUV420-8C
           return (line&1)?num_bytes:num_bytes/2; // odd lines have 8bpp, even have 16bpp
@@ -153,7 +162,7 @@ class MdiConverterNode : public rclcpp::Node {
                                   std::to_string(pLine->sCSI2Header.sShortHeader.uiDataType);
             act_content->publisher=this->create_publisher<sensor_msgs::msg::Image>(pub_name, 32);
             act_content->Image=sensor_msgs::msg::Image(rosidl_runtime_cpp::MessageInitialization::SKIP);
-            RCLCPP_INFO(this->get_logger(), "add publisher %s", pub_name.c_str());
+            
           }
           act_content->init=true;
         } else {
@@ -204,8 +213,13 @@ class MdiConverterNode : public rclcpp::Node {
               if(dt.second.image_pos) {
                 dt.second.Image.height=dt.second.image_lines;
                 dt.second.Image.width=dt.second.width;
+                dt.second.Image.encoding = csi2_type_to_ros2(dt.first);
+                dt.second.Image.header.frame_id=msg->header.frame_id + "_vc_" + std::to_string(pLine->sCSI2Header.sShortHeader.uiVirtualChannel) + "_dt_" + std::to_string(dt.first);
+                dt.second.Image.header.stamp.sec=msg->header.stamp.sec;
+                dt.second.Image.header.stamp.nanosec=msg->header.stamp.nanosec;
+                dt.second.Image.step=dt.second.length;
+                dt.second.Image.is_bigendian=false; /* not sure how it's used */
 
-                RCLCPP_INFO(this->get_logger(), "pub dt %d 0x%02X: %d", pLine->sCSI2Header.sShortHeader.uiVirtualChannel, dt.first, dt.second.image_pos);
                 dt.second.publisher->publish(dt.second.Image);
                 dt.second.image_pos=0;
                 dt.second.image_lines=0;
@@ -241,7 +255,6 @@ class MdiConverterNode : public rclcpp::Node {
       uint8_t Instance=msg->mdi_info.frame_info.device_instance;
       uint8_t Port=msg->mdi_info.frame_info.port_number;
       uint16_t InstanceChannel=((Instance)<<8) | (Port);
-      RCLCPP_ERROR(this->get_logger(), "CSI2 line count: %d", msg->number_lines);
       /* if we never saw this instance and port, we're checking what's in the frame. 
          we assume that every frame will be setup identically (i.e. same witdh/height of image),
          so we will cache this and only update if we find something different during converting.
@@ -257,7 +270,7 @@ class MdiConverterNode : public rclcpp::Node {
 
       auto end = std::chrono::system_clock::now();
       auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-      RCLCPP_INFO(this->get_logger(), "add publisher %llu", elapsed.count());
+      //RCLCPP_INFO(this->get_logger(), "add publisher %llu", (uint64_t)elapsed.count());
     }
     rclcpp::Subscription<mdi_msgs::msg::MdiCsi2Frame>::SharedPtr subscription_;
     InstanceChannelMapping meta_cache;
