@@ -15,6 +15,9 @@ Provides all the messages used by the MDI Node(let).
 - __mdi_daq_converter__<br>
 Provides the facilities to convert raw DAQ frames into ROS2 compatible images. Currently only YUV422-8bit is supported, tough. However feel free to add other conversions.
 
+- __mdi_dummy_pub__<br>
+For development purposes this publisher reads a dump of a DAQ Frame and publishes it over and over. It is basically a modification of the _mdi_nodelet_ for offline use.
+
 - __mdi_node__<br>
 Contains the ROS2 wrapper implementation around the MDI Rx API as a seperate ROS2 Node.
 
