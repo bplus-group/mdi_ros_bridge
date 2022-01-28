@@ -12,6 +12,9 @@ This node wraps around the regular API for those devices.
 - __mdi_msgs__<br>
 Provides all the messages used by the MDI Node(let).
 
+- __mdi_daq_converter__<br>
+Provides the facilities to convert raw DAQ frames into ROS2 compatible images. Currently only YUV422-8bit is supported, tough. However feel free to add other conversions.
+
 - __mdi_node__<br>
 Contains the ROS2 wrapper implementation around the MDI Rx API as a seperate ROS2 Node.
 
@@ -127,3 +130,20 @@ The MDI Status frame contains a collection of status and performance values from
 - Getting data from the API and publishing is currently in the exact same thread context - as it is assumed, that publshing will de-couple threads anyway. If this is an issue, we should switch to a thread-decoupling ourselves.
 
 - The reception thread currently identifes some of the more common MDI data types (like its status and CSI2 data frames) and provides different publishers for this. Depending on usecase we can either extend this to prepare real images (or other data equvalents) here or add a seperate node, which will offload this. Please provide feedback!
+
+### DAQ frame conversion ###
+- The conversion tries to convert RAW CSI2 data into usable ROS2 images. This is easier for some data types and more complex for others. Right now we supprot YUV422-8bit, which is pretty standard and almost identical to ROS2. Other data types, like RAW-types are more complex, as you might need additional information about the Beyer-pattern, which is not part of the CSI2 standard. Or, if the RAW data in fact contains a RADAR image instead. <br>
+However feel free to use this as a starting point for the converstion.
+
+- The MDI might split image frames into separate DAQ frames, especially if the camera is using virtual channels. Typically this can be handled by a proper configuration, but the converter is able to fit those split frames together, anyway. 
+
+- The converter creates an information tree of the data types. We split the following:<br>
+  __MDI Instance -> MDI Channel -> Virtual CSI2 Channel -> CSI2 Data Type__<br>
+  In this way we cover the following parts of the CSI2 standard:<br>
+  -> __Virtual Channels__ which have their own separate framing (begin/end).
+  -> __Virtual Channel Interleaving__ where different channels are mixed inbetween the lines.
+  -> __Data Type Interleaving__ when multiple images with the same virtual channel are contained in the same CSI2 frame.
+
+- The converter creates a separate publisher for every image type in the following scheme:<br>
+  mdi/instance__\<num>/port_\<port>/vc_\<virtual_channel>/dt_\<csi2_data_type_num> <br>
+  eg: mdi/instance_0/port_1/vc_0/dt_30
