@@ -231,8 +231,11 @@ class MdiConverterNode : public rclcpp::Node {
           pLine++;
         } else {
           if(!act_content->Image.data.size()) {
-            act_content->Image.data.reserve(act_content->lines*act_content->length);
+            act_content->Image.data.resize(act_content->lines*act_content->length);
+             //RCLCPP_INFO(this->get_logger(), "reserving %d", act_content->lines*act_content->length);
+
           }
+          //RCLCPP_INFO(this->get_logger(), "resize to %d", act_content->Image.data.size());
           memcpy(&act_content->Image.data.data()[act_content->image_pos], (pLine+1), pLine->sCSI2Header.sLongHeader.uiWordCount);
           act_content->image_pos+=pLine->sCSI2Header.sLongHeader.uiWordCount;
           act_content->image_lines++;
