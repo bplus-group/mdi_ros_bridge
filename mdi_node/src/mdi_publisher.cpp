@@ -23,6 +23,7 @@
 #include "mdi_publisher.h"
 
 #include <chrono>
+
 using namespace std::chrono_literals;
 
 /* currently neither ROS2, nor iceoryx, support variable sized messages at the moment. this makes usage of
@@ -55,7 +56,7 @@ class MdiReceiveNode : public rclcpp::Node
     }
   protected:
 
-    void evaluate_frame(std::unique_ptr<mdi_msgs::msg::Mdirawframe> pcache, const std::string& src_ip) {
+    void evaluate_frame(std::unique_ptr<mdi_msgs::msg::Mdirawframe> pcache, const std::string& src_ip, rclcpp::Time* pSimTime=nullptr) {
       
         const struct AvetoHeaderV2x1_Proto* pAveto=(struct AvetoHeaderV2x1_Proto const*)pcache->data.data();
         const struct SUniqueID_t* pUID = (struct SUniqueID_t const*)&pAveto->frame.uiStreamID;
@@ -70,7 +71,9 @@ class MdiReceiveNode : public rclcpp::Node
             csi2_msg.data.swap(pcache->data);
             csi2_msg.offset_to_payload=offset;
             csi2_msg.number_lines=pCsi2->CSI2RawLines.uiLineCount;
-            
+            if(pSimTime) {
+              csi2_msg.header.stamp=*pSimTime;
+            }
             m_mdi_csi2_publisher->publish(csi2_msg);
           } break;
           case DAQPROT_PACKET_TYPE_JSON_STATUS: {
@@ -146,7 +149,7 @@ class MdiReceiveNode : public rclcpp::Node
                                   std::to_string((FrameCache[i].SrcIp>>16)&0xFF) + "." + 
                                   std::to_string((FrameCache[i].SrcIp>>24)&0xFF);
               m_pRxAPI->FreeData(&FrameCache[i]);
-
+              
               if(used_size < pcache->data.size()) {
                 pcache->data.resize(used_size);
               }
@@ -288,12 +291,13 @@ class MdiReceiveNode : public rclcpp::Node
       std::string src_ip="127.0.0.1";
       mdi_msgs::msg::Mdirawframe* pcache=new mdi_msgs::msg::Mdirawframe(rosidl_runtime_cpp::MessageInitialization::SKIP);   
       std::unique_ptr<mdi_msgs::msg::Mdirawframe> rosframe = std::unique_ptr<mdi_msgs::msg::Mdirawframe>(pcache);
-
+      rclcpp::Time mytime=rclcpp::Node::now();
       std::vector<uint8_t> data;
       if(load_file("/tmp/YUV422-8.dump", data )) {
         rosframe->data.swap(data);
-        evaluate_frame(std::move(rosframe), src_ip);
+        evaluate_frame(std::move(rosframe), src_ip, &mytime);
       }
+
     }
 
     rclcpp::TimerBase::SharedPtr m_timed_dump_player;

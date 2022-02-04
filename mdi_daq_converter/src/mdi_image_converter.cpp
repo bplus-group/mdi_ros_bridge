@@ -332,11 +332,11 @@ class MdiConverterNode : public rclcpp::Node {
       uint8_t Port=msg->mdi_info.frame_info.port_number;
       uint16_t InstanceChannel=((Instance)<<8) | (Port);
       /* if we never saw this instance and port, we're checking what's in the frame. 
-         we assume that every frame will be setup identically (i.e. same witdh/height of image),
+         we assume that every frame will be setup identically (i.e. same width/height of image),
          so we will cache this and only update if we find something different during converting.
       */
       
-      
+
       if (!meta_cache[InstanceChannel].init) {  
         parse_frame(msg, meta_cache[InstanceChannel] );
         meta_cache[InstanceChannel].init=true;
