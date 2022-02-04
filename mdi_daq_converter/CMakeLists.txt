@@ -10,6 +10,9 @@ find_package(rclcpp REQUIRED)
 find_package(rclcpp_components REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(OpenCV REQUIRED)
+find_package(camera_calibration_parsers REQUIRED)
+find_package(image_transport REQUIRED)
 find_package(builtin_interfaces REQUIRED)
 find_package(mdi_msgs REQUIRED)
 
@@ -25,7 +28,7 @@ add_library(${PROJECT_NAME} SHARED
 target_compile_definitions(${PROJECT_NAME}
   PRIVATE "COMPOSITION_BUILDING_DLL")
 
-ament_target_dependencies(${PROJECT_NAME} rclcpp rclcpp_components std_msgs sensor_msgs mdi_msgs)
+ament_target_dependencies(${PROJECT_NAME} rclcpp rclcpp_components camera_calibration_parsers std_msgs sensor_msgs image_transport mdi_msgs)
 #ament_export_include_directories(include)
 
 rclcpp_components_register_nodes(${PROJECT_NAME} "MdiConverterNode")

@@ -25,7 +25,7 @@
 #include <chrono>
 using namespace std::chrono_literals;
 
-/* sadly, neither ROS2, nor iceoryx, support variable sized messages at the moment. this makes usage of
+/* currently neither ROS2, nor iceoryx, support variable sized messages at the moment. this makes usage of
    zero-copy a little bit... impossible, at least if your data can be at any size */
 
 
