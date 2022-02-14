@@ -14,25 +14,53 @@ find_package(std_msgs REQUIRED)
 find_package(builtin_interfaces REQUIRED)
 find_package(mdi_msgs REQUIRED)
 find_package(mdi_lib REQUIRED)
+find_package(rclcpp_components REQUIRED)
 
 include_directories(include ${mdi_lib_INCLUDE_DIRS})
 
-add_executable(mdi_rx_node 
+add_executable(mdi_rx_node
   src/mdi_publisher.cpp
   src/time_utils.cpp
 )
 
 target_link_libraries(mdi_rx_node ${rclcpp_LIBRARIES} ${mdi_lib_LIBRARIES} ${builtin_interfaces})
 
+add_library(mdi_rx_nodelet SHARED
+  ../mdi_node/src/mdi_publisher.cpp
+  ../mdi_node/src/time_utils.cpp
+)
+
+target_compile_definitions(mdi_rx_nodelet PUBLIC AS_NODELET)
+
+target_compile_definitions(mdi_rx_nodelet
+  PRIVATE "COMPOSITION_BUILDING_DLL")
+
 ament_target_dependencies(mdi_rx_node rclcpp std_msgs mdi_msgs)
+ament_target_dependencies(mdi_rx_nodelet rclcpp rclcpp_components std_msgs mdi_msgs)
 ament_export_include_directories(include)
 ament_export_dependencies(mdi_lib)
+
+rclcpp_components_register_nodes(mdi_rx_nodelet "MdiReceiveNode")
 
 
 install(TARGETS mdi_rx_node
   RUNTIME DESTINATION lib/${PROJECT_NAME}
 )
 
+install(TARGETS mdi_rx_nodelet
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION bin
+)
 
+install(DIRECTORY
+  launch
+  DESTINATION share/${PROJECT_NAME}
+)
+
+if(BUILD_TESTING)
+    find_package(ament_lint_auto REQUIRED)
+    ament_lint_auto_find_test_dependencies()
+endif()
 
 ament_package()

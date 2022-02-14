@@ -36,7 +36,7 @@
     #include <fileapi.h>
     inline int __eventWait(HANDLE h, uint32_t timeout) {
     uint32_t x = WaitForSingleObject(h, timeout);
-    return x==WAIT_OBJECT_0;
+    return x == WAIT_OBJECT_0;
     }
 
     uint64_t CreateTimestampUs() {
@@ -45,11 +45,13 @@
     QueryPerformanceFrequency((PLARGE_INTEGER)&f);
     return (((uint64_t)(t)) * ((uint64_t)1000000)) / ((uint64_t) f);
     }
-#else 
+#else
+    #include <chrono>
     #include <dlfcn.h>
     #include <unistd.h>
     #include <limits.h>
     #include <sys/select.h>
+    #include <stdint.h>
 
     int __eventWait(int fd, uint32_t timeout) {
     int result = 3;
@@ -57,7 +59,7 @@
     FD_ZERO(&set);
     FD_SET(fd, &set);
     timeval tv;
-    tv.tv_sec = (int)(timeout / 1000);
+    tv.tv_sec = static_cast<int>(timeout / 1000);
     tv.tv_usec = (timeout - (tv.tv_sec*1000)) * 1000;
     int __r = 1;
     if(timeout != 0xFFFFFFFF) {

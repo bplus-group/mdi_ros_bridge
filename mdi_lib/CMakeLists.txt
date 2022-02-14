@@ -11,11 +11,6 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_components REQUIRED)
 
-ADD_DEFINITIONS (
-  -DAS_NODELET
-  -DDUMP_LOADER
-)
-
 include_directories(
   ${CMAKE_CURRENT_LIST_DIR}/include
 )
