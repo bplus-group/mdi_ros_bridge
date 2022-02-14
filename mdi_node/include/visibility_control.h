@@ -55,4 +55,3 @@ extern "C" {
 #endif
 
 #endif  // VISIBILITY_CONTROL_H_
-

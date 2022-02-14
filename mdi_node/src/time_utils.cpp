@@ -19,14 +19,14 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
-#include "mdi_publisher.h"
+#include "mdi_publisher.hpp"
 
 /*
     Some auxillary functions to handle the node similar to what we provide with the samples of the MDI RX library.
 
     Additionally, we load the MDI RX Library dynamically! The library is distributed as a statically linked (for linux
     linked against libc of gcc 4.8 or so) package without any installer to bundle your application with the version you need.
-    Therefore we deploy the library along with our node, but we need to manually load it. 
+    Therefore we deploy the library along with our node, but we need to manually load it.
 
     Right now, only support ROS2 on linux, but Windows would also be possible.
 */
@@ -34,54 +34,56 @@
 
 #ifdef WIN32
     #include <fileapi.h>
-    inline int __eventWait(HANDLE h, uint32_t timeout) {
-    uint32_t x = WaitForSingleObject(h, timeout);
-    return x == WAIT_OBJECT_0;
-    }
+inline int __eventWait(HANDLE h, uint32_t timeout)
+{
+  uint32_t x = WaitForSingleObject(h, timeout);
+  return x == WAIT_OBJECT_0;
+}
 
-    uint64_t CreateTimestampUs() {
-    uint64_t t, f;
-    QueryPerformanceCounter((PLARGE_INTEGER)&t);
-    QueryPerformanceFrequency((PLARGE_INTEGER)&f);
-    return (((uint64_t)(t)) * ((uint64_t)1000000)) / ((uint64_t) f);
-    }
+uint64_t CreateTimestampUs()
+{
+  uint64_t t, f;
+  QueryPerformanceCounter((PLARGE_INTEGER)&t);
+  QueryPerformanceFrequency((PLARGE_INTEGER)&f);
+  return (((uint64_t)(t)) * ((uint64_t)1000000)) / ((uint64_t) f);
+}
 #else
-    #include <chrono>
     #include <dlfcn.h>
     #include <unistd.h>
     #include <limits.h>
     #include <sys/select.h>
     #include <stdint.h>
+    #include <chrono>
 
-    int __eventWait(int fd, uint32_t timeout) {
-    int result = 3;
-    fd_set set;
-    FD_ZERO(&set);
-    FD_SET(fd, &set);
-    timeval tv;
-    tv.tv_sec = static_cast<int>(timeout / 1000);
-    tv.tv_usec = (timeout - (tv.tv_sec*1000)) * 1000;
-    int __r = 1;
-    if(timeout != 0xFFFFFFFF) {
-        __r = select(fd + 1, &set, NULL, NULL, &tv );
-    }
-    if(__r > 0) {
-        static uint8_t readdummy[PIPE_BUF];
-        result = 1;
-        read(fd, readdummy, PIPE_BUF);
-    } else if(__r < 0) {
-        result = 0;
-    } else {
-        result = 0;
-    }
-    return result;
-    }
+int __eventWait(int fd, uint32_t timeout)
+{
+  int result = 3;
+  fd_set set;
+  FD_ZERO(&set);
+  FD_SET(fd, &set);
+  timeval tv;
+  tv.tv_sec = static_cast<int>(timeout / 1000);
+  tv.tv_usec = (timeout - (tv.tv_sec * 1000)) * 1000;
+  int __r = 1;
+  if (timeout != 0xFFFFFFFF) {
+    __r = select(fd + 1, &set, NULL, NULL, &tv);
+  }
+  if (__r > 0) {
+    static uint8_t readdummy[PIPE_BUF];
+    result = 1;
+    read(fd, readdummy, PIPE_BUF);
+  } else if (__r < 0) {
+    result = 0;
+  } else {
+    result = 0;
+  }
+  return result;
+}
 
-    uint64_t CreateTimestampUs() {
-    timespec ts;
-    clock_gettime(CLOCK_REALTIME, &ts);
-    return (((uint64_t)ts.tv_sec) * 1000*1000) + (ts.tv_nsec/1000);
-    }
+uint64_t CreateTimestampUs()
+{
+  timespec ts;
+  clock_gettime(CLOCK_REALTIME, &ts);
+  return (((uint64_t)ts.tv_sec) * 1000 * 1000) + (ts.tv_nsec / 1000);
+}
 #endif
-
-

@@ -33,74 +33,86 @@ using namespace std::chrono_literals;
    zero-copy a little bit... impossible, at least if your data can be at any size */
 
 
-void MdiReceiveNode::evaluate_frame(std::unique_ptr<mdi_msgs::msg::Mdirawframe> pcache,
-                                    const std::string& src_ip,
-                                    rclcpp::Time* pSimTime = nullptr) {
-    const struct AvetoHeaderV2x1_Proto* pAveto = (struct AvetoHeaderV2x1_Proto const*)pcache->data.data();
-    const struct SUniqueID_t* pUID = (struct SUniqueID_t const*)&pAveto->frame.uiStreamID;
+void MdiReceiveNode::evaluate_frame(
+  std::unique_ptr<mdi_msgs::msg::Mdirawframe> pcache,
+  const std::string & src_ip,
+  rclcpp::Time * pSimTime = nullptr)
+{
+  const struct AvetoHeaderV2x1_Proto * pAveto =
+    (struct AvetoHeaderV2x1_Proto const *)pcache->data.data();
+  const struct SUniqueID_t * pUID = (struct SUniqueID_t const *)&pAveto->frame.uiStreamID;
 
-    switch(pUID->DataType) {
-      case DAQPROT_PACKET_TYPE_CSI2_RAW_AGGREGATION: {
+  switch (pUID->DataType) {
+    case DAQPROT_PACKET_TYPE_CSI2_RAW_AGGREGATION: {
         /* for CSI2 frames, we just gather the header information and swap the payload - no need to do any
             expensive copies here */
-        const struct AvetoHeaderV2x1_CSI2Raw* pCsi2 = (struct AvetoHeaderV2x1_CSI2Raw const*)pAveto;
-        auto csi2_msg = mdi_msgs::msg::MdiCsi2Frame(rosidl_runtime_cpp::MessageInitialization::SKIP);
-        uint32_t offset = raw_convert_aveto_to_ros_msg(src_ip, pAveto, csi2_msg.mdi_info, csi2_msg.header);
+        const struct AvetoHeaderV2x1_CSI2Raw * pCsi2 =
+          (struct AvetoHeaderV2x1_CSI2Raw const *)pAveto;
+        auto csi2_msg =
+          mdi_msgs::msg::MdiCsi2Frame(rosidl_runtime_cpp::MessageInitialization::SKIP);
+        uint32_t offset = raw_convert_aveto_to_ros_msg(
+          src_ip, pAveto, csi2_msg.mdi_info,
+          csi2_msg.header);
         csi2_msg.data.swap(pcache->data);
         csi2_msg.offset_to_payload = offset;
         csi2_msg.number_lines = pCsi2->CSI2RawLines.uiLineCount;
-        if(pSimTime) {
+        if (pSimTime) {
           csi2_msg.header.stamp = *pSimTime;
         }
         m_mdi_csi2_publisher->publish(csi2_msg);
       } break;
-      case DAQPROT_PACKET_TYPE_JSON_STATUS: {
+    case DAQPROT_PACKET_TYPE_JSON_STATUS: {
         /* the MDI device regularily sends some status information, as a large JSON string. This needs
             to be copied from the payload (thanks, STL). But it's only every now and then, so it's ok. */
-        auto json_msg = mdi_msgs::msg::MdiStatusFrame(rosidl_runtime_cpp::MessageInitialization::SKIP);
-        uint32_t offset = raw_convert_aveto_to_ros_msg(src_ip, pAveto, json_msg.mdi_info, json_msg.header);
-        json_msg.stati = std::string(pcache->data.begin()+offset, pcache->data.end());
+        auto json_msg = mdi_msgs::msg::MdiStatusFrame(
+          rosidl_runtime_cpp::MessageInitialization::SKIP);
+        uint32_t offset = raw_convert_aveto_to_ros_msg(
+          src_ip, pAveto, json_msg.mdi_info,
+          json_msg.header);
+        json_msg.stati = std::string(pcache->data.begin() + offset, pcache->data.end());
         m_mdi_status_publisher->publish(json_msg);
       } break;
-      default: {
+    default: {
         /* at this point it's something different and we need to implement it either here - or directly
          * where it's needed */
         raw_convert_aveto_to_ros_msg(src_ip, pAveto, pcache->mdi_info, pcache->header);
         m_mdi_raw_publisher->publish(std::move(pcache));
       } break;
-    }
+  }
 }
-void MdiReceiveNode::mdi_reception_worker() {
+void MdiReceiveNode::mdi_reception_worker()
+{
   uint64_t received_bytes = 0;
 
   BplMeasFrameInfo_t FrameCache[256];
 
   uint32_t dwFrameCount = 256;
 
-  m_pRxAPI->InitEx(BPLMEAS_LISTEN_ALL_IFC_ADDR,
-                   BPLMEAS_DEFAULT_RX_BASE_PORT,
-                   BPLMEAS_DEFAULT_RX_PORT_COUNT+1);
+  m_pRxAPI->InitEx(
+    BPLMEAS_LISTEN_ALL_IFC_ADDR,
+    BPLMEAS_DEFAULT_RX_BASE_PORT,
+    BPLMEAS_DEFAULT_RX_PORT_COUNT + 1);
   m_pRxAPI->DeliverCorruptFrames(false);
 
   /* huge name for just a preallocation */
   m_pRxAPI->RegisterMemManager(
-    [](size_t size_to_alloc, void* pMemMgr, void** pInstanceTag) -> void* {
+    [](size_t size_to_alloc, void * pMemMgr, void ** pInstanceTag) -> void * {
       (void) pMemMgr;
       /* we're not entirely sure what we will get - so start with a raw message and swap it afterwards */
-      mdi_msgs::msg::Mdirawframe* pcache = new mdi_msgs::msg::Mdirawframe(
-               rosidl_runtime_cpp::MessageInitialization::SKIP);
+      mdi_msgs::msg::Mdirawframe * pcache = new mdi_msgs::msg::Mdirawframe(
+        rosidl_runtime_cpp::MessageInitialization::SKIP);
       pcache->data.resize(size_to_alloc);
-      *pInstanceTag =  reinterpret_cast<void*>(pcache);
+      *pInstanceTag = reinterpret_cast<void *>(pcache);
       return pcache->data.data();
     },
-    [](void* p, size_t size_to_alloc, void* pMemMgr, void** pInstanceTag) -> void* {
+    [](void * p, size_t size_to_alloc, void * pMemMgr, void ** pInstanceTag) -> void * {
       (void) p;
       (void) pMemMgr;
-      mdi_msgs::msg::Mdirawframe* pcache = (mdi_msgs::msg::Mdirawframe*)*pInstanceTag;
+      mdi_msgs::msg::Mdirawframe * pcache = (mdi_msgs::msg::Mdirawframe *)*pInstanceTag;
       pcache->data.resize(size_to_alloc);
       return pcache->data.data();
     },
-    [](void* p, void* pMemMgr, void** pInstanceTag) {
+    [](void * p, void * pMemMgr, void ** pInstanceTag) {
       (void) p;
       (void) pMemMgr;
       (void) pInstanceTag;
@@ -115,22 +127,22 @@ void MdiReceiveNode::mdi_reception_worker() {
   RCLCPP_INFO(this->get_logger(), "reception started");
 
   uint64_t TS = CreateTimestampUs();
-  while(m_worker_thread_running /*&& rclcpp::ok()*/) {
+  while (m_worker_thread_running /*&& rclcpp::ok()*/) {
     if (__eventWait(hEvt, 10)) {
       dwFrameCount = sizeof(FrameCache) / sizeof(BplMeasFrameInfo_t);
       if (m_pRxAPI->GetData(FrameCache, &dwFrameCount) == NOERROR) {
         for (uint32_t i = 0; i < dwFrameCount; i++) {
-          received_bytes+=FrameCache[i].Size;
+          received_bytes += FrameCache[i].Size;
           std::unique_ptr<mdi_msgs::msg::Mdirawframe> pcache =
-              std::unique_ptr<mdi_msgs::msg::Mdirawframe>(
-                      (mdi_msgs::msg::Mdirawframe*)FrameCache[i].pInstanceTag
-              );
+            std::unique_ptr<mdi_msgs::msg::Mdirawframe>(
+            (mdi_msgs::msg::Mdirawframe *)FrameCache[i].pInstanceTag
+            );
 
           uint32_t used_size = FrameCache[i].Size;
-          std::string src_ip = std::to_string((FrameCache[i].SrcIp)&0xFF) + "." +
-                               std::to_string((FrameCache[i].SrcIp>>8)&0xFF) + "." +
-                               std::to_string((FrameCache[i].SrcIp>>16)&0xFF) + "." +
-                               std::to_string((FrameCache[i].SrcIp>>24)&0xFF);
+          std::string src_ip = std::to_string((FrameCache[i].SrcIp) & 0xFF) + "." +
+            std::to_string((FrameCache[i].SrcIp >> 8) & 0xFF) + "." +
+            std::to_string((FrameCache[i].SrcIp >> 16) & 0xFF) + "." +
+            std::to_string((FrameCache[i].SrcIp >> 24) & 0xFF);
           m_pRxAPI->FreeData(&FrameCache[i]);
 
           if (used_size < pcache->data.size()) {
@@ -144,15 +156,16 @@ void MdiReceiveNode::mdi_reception_worker() {
     }
 
     uint64_t nTS = CreateTimestampUs();
-    if( (nTS - TS) > 1000000) {
+    if ( (nTS - TS) > 1000000) {
       BplMeasMdiReceptionStatistics_t statistics;
       if (m_pRxAPI->GetStatistics(&statistics) == NOERROR) {
         auto message = mdi_msgs::msg::Mdirxapistatus();
         message.received_good_daq_frames += statistics.NewCompletedFrames;
         message.timeout_daq_frames += statistics.NewTimeoutFrames;
-        message.tp_corrupt_daq_frames += statistics.NewCorruptFrames+statistics.NewDiscardedFrames;
+        message.tp_corrupt_daq_frames += statistics.NewCorruptFrames +
+          statistics.NewDiscardedFrames;
         message.received_bytes += received_bytes;
-        message.received_bandwidth_mib = received_bytes/1048576.f;
+        message.received_bandwidth_mib = received_bytes / 1048576.f;
         m_api_status_publisher->publish(message);
         received_bytes = 0;
       }
@@ -164,11 +177,13 @@ void MdiReceiveNode::mdi_reception_worker() {
   RCLCPP_INFO(this->get_logger(), "reception stopped");
 }
 
-uint32_t MdiReceiveNode::raw_convert_aveto_to_ros_msg(const std::string& src_ip,
-                                                      struct AvetoHeaderV2x1_Proto const*const pAveto,
-                                                      mdi_msgs::msg::MdiAvetoProfile& mdi_info,
-                                                      std_msgs::msg::Header& header) {
-  const struct SUniqueID_t* pUID = (struct SUniqueID_t const*)&pAveto->frame.uiStreamID;
+uint32_t MdiReceiveNode::raw_convert_aveto_to_ros_msg(
+  const std::string & src_ip,
+  struct AvetoHeaderV2x1_Proto const * const pAveto,
+  mdi_msgs::msg::MdiAvetoProfile & mdi_info,
+  std_msgs::msg::Header & header)
+{
+  const struct SUniqueID_t * pUID = (struct SUniqueID_t const *)&pAveto->frame.uiStreamID;
   uint64_t used_timestamp = 0;
 
   mdi_info.src_ip = src_ip;
@@ -183,8 +198,8 @@ uint32_t MdiReceiveNode::raw_convert_aveto_to_ros_msg(const std::string& src_ip,
   /* The timesynchronization is a very extensive and complex feature of MDIs, where ROS2 supports only a small
      subset. For now, we'll just assume ROS2 uses TAI and is synchonizing the MDI from the same source. */
 
-  /* MDI Profile of Aveto always uses time[0] as a MDI-local monotonic nanosecond counter as reference 
-     for any other time domain - but, by design, this counter cannot and will not carry the 
+  /* MDI Profile of Aveto always uses time[0] as a MDI-local monotonic nanosecond counter as reference
+     for any other time domain - but, by design, this counter cannot and will not carry the
      synchronized flag. For extensive analysis this counter can be used to detect, evaluate and correct
      any time jumps/gaps occring in the environment (temporary lost of GPS fix on grandmaster, etc...). */
   mdi_info.time[0].timebase_type = pAveto->time[0].uiTimebaseType;   // TB_TYPE_LOCAL_NS
@@ -205,9 +220,10 @@ uint32_t MdiReceiveNode::raw_convert_aveto_to_ros_msg(const std::string& src_ip,
 
   {
     static bool there_was_no_utc = true;
-    if(pAveto->time[1].uiTimebaseType == DAQPROT_TIMEBASE_UTC && there_was_no_utc) {
-      RCLCPP_ERROR(this->get_logger(), "at least MDI device at %s is using UTC instead of TAI"
-                                       " - check your configuration", src_ip.c_str() );
+    if (pAveto->time[1].uiTimebaseType == DAQPROT_TIMEBASE_UTC && there_was_no_utc) {
+      RCLCPP_ERROR(
+        this->get_logger(), "at least MDI device at %s is using UTC instead of TAI"
+        " - check your configuration", src_ip.c_str() );
       there_was_no_utc = false;
     }
   }
@@ -219,21 +235,25 @@ uint32_t MdiReceiveNode::raw_convert_aveto_to_ros_msg(const std::string& src_ip,
   mdi_info.time[2].timebase_flag = pAveto->time[2].uiTimebaseFlags;  // TB_FLAG_UNSYNCED
   mdi_info.time[2].timestamp = pAveto->time[2].uiTimestamp;
 
-  header.frame_id = "MDILink"+std::to_string(pUID->Instance);
+  header.frame_id = "MDILink" + std::to_string(pUID->Instance);
   header.stamp.sec = used_timestamp / 1000000000ULL;
   header.stamp.nanosec = used_timestamp - (header.stamp.sec * 1000000000ULL);
 
   return pAveto->frame.uiPayloadOffs;
 }
 
-void MdiReceiveNode::MdiReceiveNode_Initializer() {
-  if(!m_pRxAPI) throw std::runtime_error("mdi rx api was not properly laoded");
+void MdiReceiveNode::MdiReceiveNode_Initializer()
+{
+  if (!m_pRxAPI) {throw std::runtime_error("mdi rx api was not properly laoded");}
   uint32_t v = m_pRxAPI->GetApiVersion();
-  RCLCPP_INFO(this->get_logger(), "MDI API Version: %d.%d.%d (%s)",
-          (v>>16) & 0xFF, (v>>8)&0xFF, v&0xFF, (v&0x8000000)?"DEBUG":"Release");
-  RCLCPP_INFO(this->get_logger(), "MDI RX ABI Version: %d", m_pRxAPI->info.version );
+  RCLCPP_INFO(
+    this->get_logger(), "MDI API Version: %d.%d.%d (%s)",
+    (v >> 16) & 0xFF, (v >> 8) & 0xFF, v & 0xFF, (v & 0x8000000) ? "DEBUG" : "Release");
+  RCLCPP_INFO(this->get_logger(), "MDI RX ABI Version: %d", m_pRxAPI->info.version);
 
-  m_api_status_publisher = this->create_publisher<mdi_msgs::msg::Mdirxapistatus>("mdi/rxapi/status", 10);
+  m_api_status_publisher = this->create_publisher<mdi_msgs::msg::Mdirxapistatus>(
+    "mdi/rxapi/status",
+    10);
   m_mdi_raw_publisher = this->create_publisher<mdi_msgs::msg::Mdirawframe>("mdi/raw_daq", 512);
   m_mdi_csi2_publisher = this->create_publisher<mdi_msgs::msg::MdiCsi2Frame>("mdi/csi2_frame", 512);
   m_mdi_status_publisher = this->create_publisher<mdi_msgs::msg::MdiStatusFrame>("mdi/status", 32);
@@ -242,38 +262,41 @@ void MdiReceiveNode::MdiReceiveNode_Initializer() {
   m_worker_thread = new std::thread(&MdiReceiveNode::mdi_reception_worker, this);
 
   #ifdef PERFORMANCE_MEAS
-  this->m_timed_dump_player = this->create_wall_timer(500ms,
-                                        std::bind(&MdiReceiveNode::timer_callback, this));
+  this->m_timed_dump_player = this->create_wall_timer(
+    500ms,
+    std::bind(&MdiReceiveNode::timer_callback, this));
   #endif
 }
 
 #ifdef PERFORMANCE_MEAS
-bool MdiReceiveNode::load_file(const std::string& filename, std::vector<uint8_t>& data) {
-  FILE* pDump = fopen(filename.c_str(), "rb");
-  if(pDump) {
+bool MdiReceiveNode::load_file(const std::string & filename, std::vector<uint8_t> & data)
+{
+  FILE * pDump = fopen(filename.c_str(), "rb");
+  if (pDump) {
     fseek(pDump, 0, SEEK_END);
     size_t size = ftell(pDump);
     data.resize(size);
     fseek(pDump, 0, SEEK_SET);
     fread(data.data(), 1, data.size(), pDump);
     fclose(pDump);
+    return true;
   }
-  return pDump;
+  return false;
 }
 
 void MdiReceiveNode::timer_callback()
 {
-    std::string src_ip = "127.0.0.1";
-    mdi_msgs::msg::Mdirawframe* pcache =
-        new mdi_msgs::msg::Mdirawframe(rosidl_runtime_cpp::MessageInitialization::SKIP);
-    std::unique_ptr<mdi_msgs::msg::Mdirawframe> rosframe =
-        std::unique_ptr<mdi_msgs::msg::Mdirawframe>(pcache);
-    rclcpp::Time mytime = rclcpp::Node::now();
-    std::vector<uint8_t> data;
-    if(load_file("/tmp/YUV422-8.dump", data )) {
-        rosframe->data.swap(data);
-        evaluate_frame(std::move(rosframe), src_ip, &mytime);
-    }
+  std::string src_ip = "127.0.0.1";
+  mdi_msgs::msg::Mdirawframe * pcache =
+    new mdi_msgs::msg::Mdirawframe(rosidl_runtime_cpp::MessageInitialization::SKIP);
+  std::unique_ptr<mdi_msgs::msg::Mdirawframe> rosframe =
+    std::unique_ptr<mdi_msgs::msg::Mdirawframe>(pcache);
+  rclcpp::Time mytime = rclcpp::Node::now();
+  std::vector<uint8_t> data;
+  if (load_file("/tmp/YUV422-8.dump", data)) {
+    rosframe->data.swap(data);
+    evaluate_frame(std::move(rosframe), src_ip, &mytime);
+  }
 }
 #endif
 
@@ -293,6 +316,3 @@ int main(int argc, char * argv[])
 // when its library is being loaded into a running process.
 RCLCPP_COMPONENTS_REGISTER_NODE(MdiReceiveNode)
 #endif
-
-
-
