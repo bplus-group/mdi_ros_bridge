@@ -68,7 +68,7 @@ struct port_context {
   std::array<frame_content_type,4> frame_content;
 };
 
-typedef std::unordered_map<uint16_t, port_context> instance_channel_mapping;
+typedef std::unordered_map<uint16_t, port_context> instance_channel_map;
 
 /*
   Our converter separates the individual CSI2 lines based on the sending MDI (instance) and the physical
@@ -82,10 +82,10 @@ typedef std::unordered_map<uint16_t, port_context> instance_channel_mapping;
    |          |               |           |--------- Data Type (DataTypeMapping)
 
 
-  actual: we combine instance and channel as "instance_channel_mapping" as the additional effort to manage those two 
+  actual: we combine instance and channel as "instance_channel_map" as the additional effort to manage those two 
   creates more writing overhead than it solves.
 
-  instance_channel_mapping
+  instance_channel_map
           | ------------------- port_context (e.g. 0/0)
           |                           |-------------------- frame_content_type [0]
           |                           |                           |---------------- frame_content (0x1E)
@@ -117,13 +117,13 @@ class MdiConverterNode : public rclcpp::Node {
     
     rclcpp::Subscription<mdi_msgs::msg::MdiCsi2Frame>::SharedPtr subscription_;
 
-    instance_channel_mapping meta_cache;
+    instance_channel_map meta_cache;
     
     /* we have some CSI2 data types with interleaving line lengths which need more effort to validate a common line length */
-    bool weird_line_behavior(uint8_t dt);
+    bool detect_inconsistent_line_lengths(uint8_t dt);
 
     /* some CSI2 data types will map directly to a ROS2 type, others might need more "adjustment" */
-    const char* csi2_type_to_ros2(uint8_t dt);
+    const char* csi2_type_to_image_encoding(uint8_t dt);
 
     /* depending on the data type, we need to derive the actual pixels from the number of bytes */
     uint32_t convert_line_length(uint8_t dt, uint32_t line, uint16_t num_bytes);

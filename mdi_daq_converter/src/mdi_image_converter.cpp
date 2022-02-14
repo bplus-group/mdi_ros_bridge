@@ -30,7 +30,7 @@ MdiConverterNode::MdiConverterNode(const rclcpp::NodeOptions &option)
   subscription_ = this->create_subscription<mdi_msgs::msg::MdiCsi2Frame>("mdi/csi2_frame", 64, std::bind(&MdiConverterNode::topic_callback, this, _1));
 }
 
-bool MdiConverterNode::weird_line_behavior(uint8_t dt) {
+bool MdiConverterNode::detect_inconsistent_line_lengths(uint8_t dt) {
   switch(dt&0x3F) {
     case 0x18: // YUV420-8
     case 0x1C: // YUV420-8C
@@ -41,7 +41,7 @@ bool MdiConverterNode::weird_line_behavior(uint8_t dt) {
   return false;
 }
 
-const char* MdiConverterNode::csi2_type_to_ros2(uint8_t dt) {
+const char* MdiConverterNode::csi2_type_to_image_encoding(uint8_t dt) {
   switch(dt&0x3F) {
     case 0x1E: // YUV422-8
       return sensor_msgs::image_encodings::YUV422;
@@ -98,7 +98,7 @@ uint32_t MdiConverterNode::convert_line_length(uint8_t dt, uint32_t line, uint16
 bool MdiConverterNode::parse_frame(const mdi_msgs::msg::MdiCsi2Frame::SharedPtr& msg, port_context& context ) {
   uint32_t line_count=0;
   SCSI2RawLineCollection_t* pCSI2 = (SCSI2RawLineCollection_t*)&msg->data[msg->offset_to_payload];
-  const SCSI2RawLineHeader_t* pLine=(const SCSI2RawLineHeader_t*)(pCSI2+1);
+  const SCSI2RawLineHeader_t* pLine = (const SCSI2RawLineHeader_t*)(pCSI2+1);
 
   /* iterate through all CSI2 lines until we reach the end of our memory block */
   while( (void*)pLine < (void*)&msg->data[msg->data.size()] ) {
@@ -107,7 +107,7 @@ bool MdiConverterNode::parse_frame(const mdi_msgs::msg::MdiCsi2Frame::SharedPtr&
     auto act_content=&context.frame_content[pLine->sCSI2Header.sShortHeader.uiVirtualChannel][pLine->sCSI2Header.sShortHeader.uiDataType];
     line_count++;
     if(line_count > msg->number_lines) {
-      RCLCPP_ERROR(this->get_logger(), "more CSI2 lines found in frame than stated in header - seems to be something corrupt/wrong configured.");
+      RCLCPP_ERROR(this->get_logger(), "more CSI2 lines found in frame than stated in header. Check your configuration.");
       return false;
     }
     
@@ -141,11 +141,13 @@ bool MdiConverterNode::parse_frame(const mdi_msgs::msg::MdiCsi2Frame::SharedPtr&
         pLine++;
       } else {
         if(act_content->length != pLine->sCSI2Header.sLongHeader.uiWordCount && act_content->length_odd!=pLine->sCSI2Header.sLongHeader.uiWordCount && act_content->length_odd==0) {
-          if( act_content->lines&1 && weird_line_behavior(pLine->sCSI2Header.sShortHeader.uiDataType) ) {
-            /* ok, there are some data types with different line lengths - handle those! */
+          if( act_content->lines&1 && detect_inconsistent_line_lengths(pLine->sCSI2Header.sShortHeader.uiDataType) ) {
+            /* there are some data lines with different line lengths - handle those! */
             act_content->length_odd=pLine->sCSI2Header.sLongHeader.uiWordCount;
           } else {
-            RCLCPP_ERROR(this->get_logger(), "CSI2 line lenght is not constant! Check if source is a image and if everythin is configured correctly: %d - %d", act_content->length, pLine->sCSI2Header.sLongHeader.uiWordCount);
+            RCLCPP_ERROR(this->get_logger(),
+			 "CSI2 line length is not constant! Check that source is an image and everything is configured correctly: %d - %d",
+			 act_content->length, pLine->sCSI2Header.sLongHeader.uiWordCount);
             /* we'll use the new length, but abort processing (to not spam to much errors). if the new length is correct, the next frame will prove this,
               else we'll just get another error */
             act_content->length = pLine->sCSI2Header.sLongHeader.uiWordCount;
@@ -173,11 +175,11 @@ bool MdiConverterNode::convert_frame(const mdi_msgs::msg::MdiCsi2Frame::SharedPt
     auto act_content=&context.frame_content[pLine->sCSI2Header.sShortHeader.uiVirtualChannel][pLine->sCSI2Header.sShortHeader.uiDataType];
     line_count++;
     if(line_count > msg->number_lines) {
-      RCLCPP_ERROR(this->get_logger(), "more CSI2 lines found in frame than stated in header - seems to be something corrupt/wrong configured.");
+      RCLCPP_ERROR(this->get_logger(), "more CSI2 lines found in frame than stated in header - check your configuration.");
       return false;
     }
     if(!act_content->init) {
-      RCLCPP_ERROR(this->get_logger(), "CSI2 frame content changed between frames - check if your config is valid and produces stable data.");
+      RCLCPP_ERROR(this->get_logger(), "CSI2 frame content changed between frames - check your configuration.");
       return false;
     }
     
@@ -188,7 +190,7 @@ bool MdiConverterNode::convert_frame(const mdi_msgs::msg::MdiCsi2Frame::SharedPt
           if(dt.second.image_pos) {
             dt.second.Image.height=dt.second.image_lines;
             dt.second.Image.width=dt.second.width;
-            dt.second.Image.encoding = csi2_type_to_ros2(dt.first);
+            dt.second.Image.encoding = csi2_type_to_image_encoding(dt.first);
             dt.second.Image.header.frame_id=msg->header.frame_id + "_vc_" + std::to_string(pLine->sCSI2Header.sShortHeader.uiVirtualChannel) + "_dt_" + std::to_string(dt.first);
             dt.second.Image.header.stamp.sec=msg->header.stamp.sec;
             dt.second.Image.header.stamp.nanosec=msg->header.stamp.nanosec;
@@ -223,7 +225,7 @@ bool MdiConverterNode::convert_frame(const mdi_msgs::msg::MdiCsi2Frame::SharedPt
       act_content->image_pos+=pLine->sCSI2Header.sLongHeader.uiWordCount;
       act_content->image_lines++;
       if(act_content->length != pLine->sCSI2Header.sLongHeader.uiWordCount) {
-        RCLCPP_ERROR(this->get_logger(), "CSI2 line lenght is not constant! Check if source is a image and if everythin is configured correctly: %d - %d", act_content->length, pLine->sCSI2Header.sLongHeader.uiWordCount);
+        RCLCPP_ERROR(this->get_logger(), "CSI2 line length is not constant! Check if source is a image and if everythin is configured correctly: %d - %d", act_content->length, pLine->sCSI2Header.sLongHeader.uiWordCount);
         /* we'll use the new length, but abort processing (to not spam to much errors). if the new length is correct, the next frame will prove this,
             else we'll just get another error */
         act_content->length = pLine->sCSI2Header.sLongHeader.uiWordCount;
