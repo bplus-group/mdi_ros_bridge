@@ -25,6 +25,7 @@ add_library(${PROJECT_NAME} SHARED
   src/mdi_image_converter.cpp
 )
 
+
 target_compile_definitions(${PROJECT_NAME}
   PRIVATE "COMPOSITION_BUILDING_DLL")
 
@@ -38,6 +39,15 @@ install(TARGETS ${PROJECT_NAME}
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin
 )
+
+if(BUILD_TESTING)
+  find_package(ament_lint_auto REQUIRED)
+  find_package(ament_cmake_gtest REQUIRED)
+  ament_lint_auto_find_test_dependencies()
+  ament_add_gtest(${PROJECT_NAME}_unit_tests test/unittests.cpp)
+  target_link_libraries(${PROJECT_NAME}_unit_tests ${PROJECT_NAME})
+endif()
+
 
 # Install launch files.
 install(DIRECTORY
