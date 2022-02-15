@@ -33,11 +33,13 @@
 #include <sensor_msgs/msg/image.hpp>
 #include <sensor_msgs/image_encodings.hpp>
 #include <image_transport/image_transport.hpp>
+#include <cv_bridge/cv_bridge.h>
+#include "sensor_msgs/image_encodings.hpp"
 
 #include "MDI_DAQProt_Profile.h"
 
-struct frame_content {
-  frame_content() {
+struct VirtualChannelContext {
+  VirtualChannelContext() {
     lines=0;
     length=0;
     init=false;
@@ -58,17 +60,17 @@ struct frame_content {
   uint32_t image_lines;
 };
 
-typedef std::unordered_map<uint8_t, frame_content> frame_content_type;
+typedef std::unordered_map<uint8_t, VirtualChannelContext> virtual_channel_context_type;
 
-struct port_context {
-  port_context() {
+struct PortContext {
+  PortContext() {
     init=false;
   }
   bool init;
-  std::array<frame_content_type,4> frame_content;
+  std::array<virtual_channel_context_type,4> virtual_channel_context;
 };
 
-typedef std::unordered_map<uint16_t, port_context> instance_channel_map;
+typedef std::unordered_map<uint16_t, PortContext> instance_channel_map;
 
 /*
   Our converter separates the individual CSI2 lines based on the sending MDI (instance) and the physical
@@ -86,9 +88,9 @@ typedef std::unordered_map<uint16_t, port_context> instance_channel_map;
   creates more writing overhead than it solves.
 
   instance_channel_map
-          | ------------------- port_context (e.g. 0/0)
-          |                           |-------------------- frame_content_type [0]
-          |                           |                           |---------------- frame_content (0x1E)
+          | ------------------- PortContext (e.g. 0/0)
+          |                           |-------------------- virtual_channel_context_type [0]
+          |                           |                           |---------------- VirtualChannelContext (0x1E)
           |                           |                           |                       | - image_publisher
           |                           |                           |                       | - camera_info
           |                           |                           |                       | - other image contextual data
@@ -128,9 +130,9 @@ class MdiConverterNode : public rclcpp::Node {
     /* depending on the data type, we need to derive the actual pixels from the number of bytes */
     uint32_t convert_line_length(uint8_t dt, uint32_t line, uint16_t num_bytes);
 
-    bool parse_frame(const mdi_msgs::msg::MdiCsi2Frame::SharedPtr& msg, port_context& context);
+    bool parse_frame(const mdi_msgs::msg::MdiCsi2Frame::SharedPtr& msg, PortContext& context);
 
-    bool convert_frame(const mdi_msgs::msg::MdiCsi2Frame::SharedPtr& msg, port_context& context);
+    bool convert_frame(const mdi_msgs::msg::MdiCsi2Frame::SharedPtr& msg, PortContext& context);
 
     void topic_callback(const mdi_msgs::msg::MdiCsi2Frame::SharedPtr msg);
 

@@ -95,7 +95,7 @@ uint32_t MdiConverterNode::convert_line_length(uint8_t dt, uint32_t line, uint16
   }
 }
 
-bool MdiConverterNode::parse_frame(const mdi_msgs::msg::MdiCsi2Frame::SharedPtr& msg, port_context& context ) {
+bool MdiConverterNode::parse_frame(const mdi_msgs::msg::MdiCsi2Frame::SharedPtr& msg, PortContext& context ) {
   uint32_t line_count=0;
   SCSI2RawLineCollection_t* pCSI2 = (SCSI2RawLineCollection_t*)&msg->data[msg->offset_to_payload];
   const SCSI2RawLineHeader_t* pLine = (const SCSI2RawLineHeader_t*)(pCSI2+1);
@@ -104,7 +104,7 @@ bool MdiConverterNode::parse_frame(const mdi_msgs::msg::MdiCsi2Frame::SharedPtr&
   while( (void*)pLine < (void*)&msg->data[msg->data.size()] ) {
     
     /* grab something shorter based on virtual channel and data type */
-    auto act_content=&context.frame_content[pLine->sCSI2Header.sShortHeader.uiVirtualChannel][pLine->sCSI2Header.sShortHeader.uiDataType];
+    auto act_content=&context.virtual_channel_context[pLine->sCSI2Header.sShortHeader.uiVirtualChannel][pLine->sCSI2Header.sShortHeader.uiDataType];
     line_count++;
     if(line_count > msg->number_lines) {
       RCLCPP_ERROR(this->get_logger(), "more CSI2 lines found in frame than stated in header. Check your configuration.");
@@ -164,7 +164,7 @@ bool MdiConverterNode::parse_frame(const mdi_msgs::msg::MdiCsi2Frame::SharedPtr&
 }
 
 
-bool MdiConverterNode::convert_frame(const mdi_msgs::msg::MdiCsi2Frame::SharedPtr& msg, port_context& context ) {
+bool MdiConverterNode::convert_frame(const mdi_msgs::msg::MdiCsi2Frame::SharedPtr& msg, PortContext& context ) {
   uint32_t line_count=0;
   SCSI2RawLineCollection_t* pCSI2 = (SCSI2RawLineCollection_t*)&msg->data[msg->offset_to_payload];
   const SCSI2RawLineHeader_t* pLine=(const SCSI2RawLineHeader_t*)(pCSI2+1);
@@ -172,7 +172,7 @@ bool MdiConverterNode::convert_frame(const mdi_msgs::msg::MdiCsi2Frame::SharedPt
   /* iterate through all CSI2 lines until we reach the end of our memory block */
   while( (void*)pLine < (void*)&msg->data[msg->data.size()] ) {
     /* grab something shorter based on virtual channel and data type */
-    auto act_content=&context.frame_content[pLine->sCSI2Header.sShortHeader.uiVirtualChannel][pLine->sCSI2Header.sShortHeader.uiDataType];
+    auto act_content=&context.virtual_channel_context[pLine->sCSI2Header.sShortHeader.uiVirtualChannel][pLine->sCSI2Header.sShortHeader.uiDataType];
     line_count++;
     if(line_count > msg->number_lines) {
       RCLCPP_ERROR(this->get_logger(), "more CSI2 lines found in frame than stated in header - check your configuration.");
@@ -186,7 +186,7 @@ bool MdiConverterNode::convert_frame(const mdi_msgs::msg::MdiCsi2Frame::SharedPt
     if(pLine->sCSI2Header.sShortHeader.uiDataType < 0x10) {
       /* if we get a end-of-frame (0x01) or a new start-of-frame (0x00) for a virtual channel, we close what we have and publish this */
       if(pLine->sCSI2Header.sShortHeader.uiDataType==0x00 || pLine->sCSI2Header.sShortHeader.uiDataType==0x01 ) {
-        for(auto& dt : context.frame_content[pLine->sCSI2Header.sShortHeader.uiVirtualChannel]) {
+        for(auto& dt : context.virtual_channel_context[pLine->sCSI2Header.sShortHeader.uiVirtualChannel]) {
           if(dt.second.image_pos) {
             dt.second.Image.height=dt.second.image_lines;
             dt.second.Image.width=dt.second.width;
