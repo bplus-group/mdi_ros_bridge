@@ -15,32 +15,28 @@ Provides all the messages used by the MDI Node(let).
 - __mdi_daq_converter__<br>
 Provides the facilities to convert raw DAQ frames into ROS2 compatible images. Currently only YUV422-8bit is supported, tough. However feel free to add other conversions.
 
-- __mdi_dummy_pub__<br>
-For development purposes this publisher reads a dump of a DAQ Frame and publishes it over and over. It is basically a modification of the _mdi_nodelet_ for offline use.
 
 - __mdi_node__<br>
 Contains the ROS2 wrapper implementation around the MDI Rx API as a separate ROS2 Node.
+Additionally a nodelet variant is available as well as a dummy publisher, which reads a raw DAQ Frame from disk and keeps on publishing it (for development purposes).
 
-- __mdi_nodelet__<br>
-Contains the (almost) identical ROS2 wrapper implementation from __mdi_node__ as ROS2 Component (aka Nodelet).
 
-- __third_party__
-Contains the actual MDI Rx API for various platforms (ok, right now just linux x86_64). While the Windows counterpart is available as binary, currently no ROS2 setup on Windows is at hand.
+- __mdi_lib__
+Contains the actual MDI Rx API for various platforms (ok, right now just linux x86_64). Windows is as of yet unsupported.
 
 ## Quick Start
 We have both, a node and a nodelet - whatever fits the your approach most. From the wrappers point of view, the difference is next to not existing.
 
 First, clone the repository
 ```
-~$ git clone <url_to_do>
+~$ git clone https://github.com/bplus_group/sw_lib_bplus_mdi_ros2 ~/ros2_ws/src
 ```
 
 > __optional__<br>
-update the API binaries (those are ABI stable) by replacing the binaries in third_party folder
+update the API binaries (those are ABI stable) by replacing the binaries in mdi_lib folder
 
 
 
-### As nodelet
 
 0. source your ros2 installation, if not already done
    ```
@@ -51,47 +47,23 @@ update the API binaries (those are ABI stable) by replacing the binaries in thir
 1. build and source the MDI message definitions
 
    ```
-   ~$ cd sw_lib_bplus_mdi_ros2/mdi_msgs
-   ~/sw_lib_bplus_mdi_ros2/mdi_msgs$ colcon build
-   ~/sw_lib_bplus_mdi_ros2/mdi_msgs$ . ./install/local_setup.sh
+   ~$ cd ros2_ws
+   ~/ros2_ws$ colcon build
+   ~/ros2_ws$ . ./install/local_setup.sh
    ```
 
-2. build the MDI receiver as nodelet / component
-   ```
-   ~$ cd sw_lib_bplus_mdi_ros2/mdi_nodelet
-   ~/sw_lib_bplus_mdi_ros2/mdi_nodelet$ colcon build
-   ~/sw_lib_bplus_mdi_ros2/mdi_nodelet$ . ./install/local_setup.sh
-   ```
+### As nodelet
 
-3. launch the nodelet
+2. launch the nodelet
    ```
-   ~$ ros2 launch mdi_nodelet mdi_nodelet.launch.py
+   ~$ ros2 launch mdi_node mdi_nodelet.launch.py
    ```
 
 ### As node
 
-0. source your ros2 installation, if not already done
-   ```
-   ~$ cd ros2_galactic
-   ~/ros2_galactic$ . ./install/local_setup.sh
    ```
 
-1. build and source the MDI message definitions
-
-   ```
-   ~$ cd sw_lib_bplus_mdi_ros2/mdi_msgs
-   ~/sw_lib_bplus_mdi_ros2/mdi_msgs$ colcon build
-   ~/sw_lib_bplus_mdi_ros2/mdi_msgs$ . ./install/local_setup.sh
-   ```
-
-2. build the MDI receiver as a node
-   ```
-   ~$ cd sw_lib_bplus_mdi_ros2/mdi_node
-   ~/sw_lib_bplus_mdi_ros2/mdi_node$ colcon build
-   ~/sw_lib_bplus_mdi_ros2/mdi_node$ . ./install/local_setup.sh
-   ```
-
-3. launch the nodelet
+2. launch the node
    ```
    ~$ ros2 run mdi_node mdi_rx_node
    ```
