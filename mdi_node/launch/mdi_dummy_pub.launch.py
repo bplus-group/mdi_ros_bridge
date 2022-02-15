@@ -14,7 +14,7 @@ def generate_launch_description():
             executable='component_container',
             composable_node_descriptions=[
                 ComposableNode(
-                    package='mdi_dummy_pub',
+                    package='mdi_node',
                     plugin='MdiReceiveNode',
                     name='mdi_dummy_pub')
                 # Add here another component

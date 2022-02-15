@@ -29,18 +29,36 @@ add_library(mdi_rx_nodelet SHARED
   ../mdi_node/src/mdi_publisher.cpp
   ../mdi_node/src/time_utils.cpp
 )
+target_link_libraries(mdi_rx_nodelet ${rclcpp_LIBRARIES} ${mdi_lib_LIBRARIES} ${builtin_interfaces})
+
 
 target_compile_definitions(mdi_rx_nodelet PUBLIC AS_NODELET)
 
 target_compile_definitions(mdi_rx_nodelet
   PRIVATE "COMPOSITION_BUILDING_DLL")
 
+
+add_library(mdi_dummy_pub SHARED
+  ../mdi_node/src/mdi_publisher.cpp
+  ../mdi_node/src/time_utils.cpp
+)
+target_link_libraries(mdi_dummy_pub ${rclcpp_LIBRARIES} ${mdi_lib_LIBRARIES} ${builtin_interfaces})
+
+target_compile_definitions(mdi_dummy_pub PUBLIC AS_NODELET)
+target_compile_definitions(mdi_dummy_pub PUBLIC DUMMY_PUB)
+
+target_compile_definitions(mdi_dummy_pub
+  PRIVATE "COMPOSITION_BUILDING_DLL")
+
 ament_target_dependencies(mdi_rx_node rclcpp std_msgs mdi_msgs)
 ament_target_dependencies(mdi_rx_nodelet rclcpp rclcpp_components std_msgs mdi_msgs)
+ament_target_dependencies(mdi_dummy_pub rclcpp rclcpp_components std_msgs mdi_msgs)
 ament_export_include_directories(include)
 ament_export_dependencies(mdi_lib)
+ament_export_dependencies(rosidl_default_runtime)
 
 rclcpp_components_register_nodes(mdi_rx_nodelet "MdiReceiveNode")
+rclcpp_components_register_nodes(mdi_dummy_pub "MdiReceiveNode")
 
 
 install(TARGETS mdi_rx_node
@@ -48,6 +66,12 @@ install(TARGETS mdi_rx_node
 )
 
 install(TARGETS mdi_rx_nodelet
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION bin
+)
+
+install(TARGETS mdi_dummy_pub
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin

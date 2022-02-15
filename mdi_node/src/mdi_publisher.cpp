@@ -30,7 +30,7 @@
 using namespace std::chrono_literals;
 
 /* currently neither ROS2, nor iceoryx, support variable sized messages at the moment. this makes usage of
-   zero-copy a little bit... impossible, at least if your data can be at any size */
+   zero-copy a little bit... impossible, at least if your data can be of arbitrary size */
 
 
 void MdiReceiveNode::evaluate_frame(
@@ -165,7 +165,8 @@ void MdiReceiveNode::mdi_reception_worker()
         message.tp_corrupt_daq_frames += statistics.NewCorruptFrames +
           statistics.NewDiscardedFrames;
         message.received_bytes += received_bytes;
-        message.received_bandwidth_mib = received_bytes / 1048576.f;
+        const double_t bytes_to_mib = 1<<20;
+        message.received_bandwidth_mib = received_bytes / bytes_to_mib;
         m_api_status_publisher->publish(message);
         received_bytes = 0;
       }
@@ -261,14 +262,14 @@ void MdiReceiveNode::MdiReceiveNode_Initializer()
   m_worker_thread_running = true;
   m_worker_thread = new std::thread(&MdiReceiveNode::mdi_reception_worker, this);
 
-  #ifdef PERFORMANCE_MEAS
+  #ifdef DUMMY_PUB
   this->m_timed_dump_player = this->create_wall_timer(
     500ms,
     std::bind(&MdiReceiveNode::timer_callback, this));
   #endif
 }
 
-#ifdef PERFORMANCE_MEAS
+#ifdef DUMMY_PUB
 bool MdiReceiveNode::load_file(const std::string & filename, std::vector<uint8_t> & data)
 {
   FILE * pDump = fopen(filename.c_str(), "rb");

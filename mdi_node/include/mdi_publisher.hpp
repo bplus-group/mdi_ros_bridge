@@ -102,7 +102,7 @@ private:
 
   void MdiReceiveNode_Initializer();
 
-#ifdef PERFORMANCE_MEAS
+#ifdef DUMMY_PUB
   bool load_file(const std::string & filename, std::vector<uint8_t> & data);
 
   void timer_callback();
