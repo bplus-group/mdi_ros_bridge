@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef COMPOSITION__VISIBILITY_CONTROL_H_
-#define COMPOSITION__VISIBILITY_CONTROL_H_
+#ifndef VISIBILITY_CONTROL_H_
+#define VISIBILITY_CONTROL_H_
 
 #ifdef __cplusplus
 extern "C" {
@@ -54,4 +54,4 @@ extern "C" {
 }
 #endif
 
-#endif // COMPOSITION__VISIBILITY_CONTROL_H_
+#endif  // VISIBILITY_CONTROL_H_
