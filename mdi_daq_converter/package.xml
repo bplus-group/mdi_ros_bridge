@@ -1,18 +1,23 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>mdi_nodelet</name>
+  <name>mdi_daq_converter</name>
   <version>0.1.0</version>
-  <description>bplus MDI receiver nodelet</description>
-  <maintainer email="christian.wolf@b-plus.com">b-plus technologies GmbH</maintainer>
+  <description>bplus MDI raw data converter</description>
+  <maintainer email="christian.wolf@b-plus.com">bplus</maintainer>
   <license>Apache License 2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
   <depend>rclcpp</depend>
   <depend>std_msgs</depend>
+  <depend>image_transport</depend>
   <depend>mdi_msgs</depend>
+  <depend>cv_bridge</depend>
+  <depend>libopencv-dev</depend>
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
+  <test_depend>ament_cmake_gtest</test_depend>
+
 
   <build_depend>builtin_interfaces</build_depend>
   <exec_depend>builtin_interfaces</exec_depend>

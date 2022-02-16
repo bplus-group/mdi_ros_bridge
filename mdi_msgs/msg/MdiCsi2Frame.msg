@@ -2,6 +2,7 @@ std_msgs/Header header
 MdiAvetoProfile mdi_info
 # this is the offset IN data to the actual csi2 lines
 uint32      offset_to_payload
+uint32      number_lines
 # csi2 lines are stored one after another, see description at the end
 uint8[]     data
 
