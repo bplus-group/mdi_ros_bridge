@@ -29,7 +29,7 @@ We have both, a node and a nodelet - whatever fits the your approach most. From 
 
 First, clone the repository
 ```
-~$ git clone https://github.com/bplus_group/sw_lib_bplus_mdi_ros2 ~/ros2_ws/src
+~$ git clone https://github.com/bplus-group/mdi_ros_bridge.git ~/ros2_ws/src
 ```
 
 > __optional__<br>
@@ -61,7 +61,6 @@ update the API binaries (those are ABI stable) by replacing the binaries in mdi_
 
 ### As node
 
-   ```
 
 2. launch the node
    ```
