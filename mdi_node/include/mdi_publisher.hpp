@@ -74,12 +74,11 @@ public:
   {
     m_worker_thread_running = false;
     m_worker_thread->join();
-    delete (m_worker_thread);
   }
 
 protected:
   void evaluate_frame(
-    std::unique_ptr<mdi_msgs::msg::Mdirawframe> pcache,
+    mdi_msgs::msg::Mdirawframe & pcache,
     const std::string & src_ip,
     rclcpp::Time * pSimTime);
 
@@ -93,7 +92,7 @@ protected:
 
 private:
   MdiRx_Reception_interface_t const * const m_pRxAPI;
-  std::thread * m_worker_thread;
+  std::unique_ptr<std::thread> m_worker_thread;
   bool m_worker_thread_running;
   rclcpp::Publisher<mdi_msgs::msg::Mdirxapistatus>::SharedPtr m_api_status_publisher;
   rclcpp::Publisher<mdi_msgs::msg::Mdirawframe>::SharedPtr m_mdi_raw_publisher;
