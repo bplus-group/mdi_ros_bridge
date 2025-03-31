@@ -22,6 +22,7 @@ find_package(cv_bridge REQUIRED)
 
 include_directories(
   ${mdi_lib_INCLUDE_DIRS}
+  ${mdi_msgs_INCLUDE_DIRS}
   ${CMAKE_CURRENT_LIST_DIR}/include
 )
 
@@ -33,7 +34,7 @@ add_library(${PROJECT_NAME} SHARED
 target_compile_definitions(${PROJECT_NAME}
   PRIVATE "COMPOSITION_BUILDING_DLL")
 
-ament_target_dependencies(${PROJECT_NAME} rclcpp rclcpp_components camera_calibration_parsers std_msgs sensor_msgs image_transport mdi_msgs cv_bridge)
+ament_target_dependencies(${PROJECT_NAME} rclcpp rclcpp_components camera_calibration_parsers std_msgs sensor_msgs image_transport mdi_msgs cv_bridge mdi_lib)
 #ament_export_include_directories(include)
 
 rclcpp_components_register_nodes(${PROJECT_NAME} "MdiConverterNode")
